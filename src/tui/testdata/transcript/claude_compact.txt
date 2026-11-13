@@ -1,0 +1,13 @@
+── turn t1
+› Rename proto.Frame
+▸ Explored  1 read · 1 search · 1 list                                    3.6s
+▸ Edit ×2   /w/demo.zig                                                  +2 −2
+▾ Bash      ls does-not-exist                                     error · 1.2s
+    Exit code 2
+    "does-not-exist": No such file or directory (os error 2)
+  The first command failed as expected. Running the second.
+▸ Bash      echo ok                                                       1.2s
+▸ Agent     Read notes.txt                         ● done · 1 call · ] to open
+  All steps ran; `ls does-not-exist` failed as expected, and the sub-agent
+  reported that notes.txt contains `demo`.
+turn t1 completed

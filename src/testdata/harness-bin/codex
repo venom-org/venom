@@ -1,0 +1,30 @@
+#!/bin/sh
+# A fake `codex` for tests: just what `venom doctor` and `venom
+# harness list` run. The conformance suite gets it first on PATH, so no test
+# reaches the real CLI. With $VENOM_FAKE_HARNESS_STATE/codex-signed-out it is
+# signed out, and `login` signs it in. Only shell builtins and /bin/rm: tests
+# give it a PATH of fakes alone.
+state="${VENOM_FAKE_HARNESS_STATE:-/nonexistent}/codex-signed-out"
+case "$*" in
+--version) echo 'codex-cli 0.167.0' ;;
+'login status')
+    if [ -e "$state" ]; then
+        echo 'Not logged in' >&2
+        exit 1
+    fi
+    echo 'Logged in using an API key - fake-secret-***' >&2
+    ;;
+login) /bin/rm -f "$state" ;;
+app-server*)
+    while IFS= read -r line; do
+        case "$line" in
+        *'"initialize"'*) echo '{"id":1,"result":{"userAgent":"fake/0.167.0"}}' ;;
+        *'"account/read"'*) echo '{"id":2,"result":{"account":{"type":"chatgpt","email":"fake-secret@example.invalid"},"requiresOpenaiAuth":true}}' ;;
+        esac
+    done
+    ;;
+*)
+    echo "fake codex: unexpected arguments: $*" >&2
+    exit 2
+    ;;
+esac

@@ -1,0 +1,39 @@
+# Tool items and approvals in three turns of one process: what a
+# turn keeps must not outlive it. Turn 3 approves an item of turn 1 that it
+# never started: nothing identifies that call any more.
+> {"method":"initialize","id":0}
+< {"id":0,"result":{"userAgent":"codex_cli_rs/0.167.0 (Linux; x86_64)"}}
+> {"method":"initialized","params":{}}
+> {"method":"thread/start","id":1}
+< {"id":1,"result":{"thread":{"id":"thr_t"},"model":"m"}}
+> {"method":"account/read","id":90}
+< {"id":90,"result":{"account":null,"requiresOpenaiAuth":true}}
+> {"method":"account/rateLimits/read","id":91}
+< {"id":91,"error":{"code":-32600,"message":"rate limits need a ChatGPT sign-in"}}
+> {"method":"turn/start","id":2}
+< {"id":2,"result":{"turn":{"id":"turn_1","status":"inProgress","items":[]}}}
+< {"method":"turn/started","params":{"threadId":"thr_t","turn":{"id":"turn_1","status":"inProgress","items":[]}}}
+< {"method":"item/started","params":{"threadId":"thr_t","turnId":"turn_1","item":{"type":"commandExecution","id":"i1","command":"make","cwd":"$CWD","status":"inProgress","commandActions":[]}}}
+< {"method":"item/commandExecution/requestApproval","id":50,"params":{"threadId":"thr_t","turnId":"turn_1","itemId":"i1","command":"make","cwd":"$CWD"}}
+> {"id":50,"result":{"decision":"accept"}}
+< {"method":"serverRequest/resolved","params":{"threadId":"thr_t","requestId":50}}
+< {"method":"item/completed","params":{"threadId":"thr_t","turnId":"turn_1","item":{"type":"commandExecution","id":"i1","command":"make","cwd":"$CWD","status":"completed","commandActions":[],"exitCode":0}}}
+< {"method":"turn/completed","params":{"threadId":"thr_t","turn":{"id":"turn_1","status":"completed","error":null,"items":[]}}}
+> {"method":"turn/start","id":3}
+< {"id":3,"result":{"turn":{"id":"turn_2","status":"inProgress","items":[]}}}
+< {"method":"turn/started","params":{"threadId":"thr_t","turn":{"id":"turn_2","status":"inProgress","items":[]}}}
+< {"method":"item/started","params":{"threadId":"thr_t","turnId":"turn_2","item":{"type":"commandExecution","id":"i2","command":"make","cwd":"$CWD","status":"inProgress","commandActions":[]}}}
+< {"method":"item/started","params":{"threadId":"thr_t","turnId":"turn_2","item":{"type":"fileChange","id":"i3","changes":[{"path":"a","kind":{"type":"update"},"diff":"@@"}],"status":"inProgress"}}}
+< {"method":"item/commandExecution/requestApproval","id":51,"params":{"threadId":"thr_t","turnId":"turn_2","itemId":"i2","command":"make","cwd":"$CWD"}}
+> {"id":51,"result":{"decision":"accept"}}
+< {"method":"serverRequest/resolved","params":{"threadId":"thr_t","requestId":51}}
+< {"method":"item/completed","params":{"threadId":"thr_t","turnId":"turn_2","item":{"type":"commandExecution","id":"i2","command":"make","cwd":"$CWD","status":"completed","commandActions":[],"exitCode":0}}}
+< {"method":"item/completed","params":{"threadId":"thr_t","turnId":"turn_2","item":{"type":"fileChange","id":"i3","changes":[{"path":"a","kind":{"type":"update"},"diff":"@@"}],"status":"completed"}}}
+< {"method":"turn/completed","params":{"threadId":"thr_t","turn":{"id":"turn_2","status":"completed","error":null,"items":[]}}}
+> {"method":"turn/start","id":4}
+< {"id":4,"result":{"turn":{"id":"turn_3","status":"inProgress","items":[]}}}
+< {"method":"turn/started","params":{"threadId":"thr_t","turn":{"id":"turn_3","status":"inProgress","items":[]}}}
+< {"method":"item/fileChange/requestApproval","id":52,"params":{"threadId":"thr_t","turnId":"turn_3","itemId":"i1","reason":"Edit"}}
+> {"id":52,"result":{"decision":"decline"}}
+< {"method":"serverRequest/resolved","params":{"threadId":"thr_t","requestId":52}}
+< {"method":"turn/completed","params":{"threadId":"thr_t","turn":{"id":"turn_3","status":"completed","error":null,"items":[]}}}

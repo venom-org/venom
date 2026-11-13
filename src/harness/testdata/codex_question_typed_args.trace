@@ -1,0 +1,17 @@
+# A question with no options (options null or missing) takes a typed answer.
+> {"method":"initialize","id":0}
+< {"id":0,"result":{"userAgent":"codex_cli_rs/0.167.0"}}
+> {"method":"initialized"}
+> {"method":"thread/start","id":1}
+< {"id":1,"result":{"thread":{"id":"thr_q"},"model":"gpt-5.5-codex"}}
+> {"method":"account/read","id":90}
+< {"id":90,"result":{"account":null,"requiresOpenaiAuth":true}}
+> {"method":"account/rateLimits/read","id":91}
+< {"id":91,"error":{"code":-32600,"message":"rate limits need a ChatGPT sign-in"}}
+> {"method":"turn/start","id":2}
+< {"method":"turn/started","params":{"threadId":"thr_q","turn":{"id":"turn_1","status":"inProgress","items":[]}}}
+< {"method":"item/tool/requestUserInput","id":9,"params":{"threadId":"thr_q","turnId":"turn_1","itemId":"ui_1","questions":[{"id":"framing","header":"Framing","question":"Why?","isOther":false,"options":null},{"id":"order","header":"Order","question":"Then?","isOther":false}]}}
+> {"id":9,"result":{"answers":{"framing":{"answers":["one"]},"order":{"answers":["two"]}}}}
+< {"method":"serverRequest/resolved","params":{"threadId":"thr_q","requestId":9}}
+< {"method":"item/completed","params":{"threadId":"thr_q","turnId":"turn_1","item":{"type":"agentMessage","id":"m_1","text":"Thanks."}}}
+< {"method":"turn/completed","params":{"threadId":"thr_q","turn":{"id":"turn_1","status":"completed","error":null,"items":[]}}}

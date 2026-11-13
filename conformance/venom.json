@@ -1,0 +1,20 @@
+{
+  "tool": "venom",
+  "read": {"args": ["agent", "list"], "result": {"agents": []}, "mcp": {"name": "agent_dlist", "arguments": {}}},
+  "usage_error": {"args": ["agent", "list", "--no-such-option=1"], "code": "invalid_params.unknown"},
+  "mutation": {
+    "args": ["workspace", "add", "--path=/dev"],
+    "result": {"path": "/dev", "added": true, "repos": []},
+    "mcp": {"name": "workspace_dadd", "arguments": {"path": "/dev"}},
+    "observe": {"args": ["workspace", "list"], "before": {"workspaces": []}, "after": {"workspaces": [{"path": "/dev", "repos": []}]}}
+  },
+  "stream": {"kind": "events"},
+  "config": {
+    "key": "grants.unknown", "default": ".{.{.right=.read,.scope=\"*\"}}", "value": ".{.{.right=.read,.scope=\"config:root\"}}",
+    "observe": {
+      "args": ["whoami"],
+      "before": {"principal": "unknown", "kind": "unknown", "parent": null, "grants": [{"right": "read", "scope": "*"}], "namespace": "user", "expires": null},
+      "after": {"principal": "unknown", "kind": "unknown", "parent": null, "grants": [{"right": "read", "scope": "config:root"}], "namespace": "user", "expires": null}
+    }
+  }
+}

@@ -1,0 +1,24 @@
+╭ Agents ────── 0 live ╮╭ No agent ────────────────────────────────────────────╮
+│                      ││ No agents yet. Start one with venom agent spawn      │
+│                      ││ --cwd=<folder> --task=<text>.                        │
+│                      ││                                                      │
+│                      ││                                                      │
+│                      ││                                                      │
+│                      ││                                                      │
+│                      ││                                                      │
+│                      ││                                                      │
+│                      ││                                                      │
+│       ╭ Context window ───────────────────────── libghostty-vt spike ╮       │
+│       │ Its harness has not reported a context size yet.             │       │
+│       ╰──────────────────────────────────────────────────────────────╯       │
+│                      ││                                                      │
+│                      ││                                                      │
+│                      ││                                                      │
+│                      ││                                                      │
+│                      ││                                                      │
+│                      │╰──────────────────────────────────────────────────────╯
+│                      │╭ Input ───────────────────────────────────────────────╮
+│                      ││› Write a prompt; enter sends it (agent send)         │
+│                      ││                                 context ▱▱▱▱▱▱▱▱▱▱ — │
+╰──────────────────────╯╰──────────────────────────────────────────────────────╯
+ ▲ 0 need you · ◆ 0 running │ no agents │ NORMAL                      esc close

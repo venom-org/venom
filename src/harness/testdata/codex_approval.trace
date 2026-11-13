@@ -1,0 +1,36 @@
+# A sample turn: steer, an exec approval answered "always", usage.
+# The ids of venom's requests are not compared (see codex_app_server.py).
+> {"method":"initialize","id":0,"params":{"clientInfo":{"name":"venom","title":"venom"}}}
+< {"id":0,"result":{"userAgent":"codex_cli_rs/0.167.0 (Linux; x86_64)","codexHome":"/home/u/.codex","platformFamily":"unix","platformOs":"linux"}}
+> {"method":"initialized","params":{}}
+> {"method":"thread/start","id":1,"params":{"cwd":"$CWD","approvalPolicy":"on-request","sandbox":"workspace-write"}}
+< {"id":1,"result":{"thread":{"id":"thr_123","sessionId":"thr_123"},"model":"gpt-5.5-codex","modelProvider":"openai","cwd":"$CWD","approvalPolicy":"on-request"}}
+> {"method":"account/read","id":90}
+< {"id":90,"result":{"account":{"type":"chatgpt","email":null,"planType":"plus"},"requiresOpenaiAuth":true}}
+> {"method":"account/rateLimits/read","id":91}
+< {"id":91,"result":{"rateLimits":{"limitId":"codex","primary":{"usedPercent":30,"windowDurationMins":300,"resetsAt":1794063600},"secondary":{"usedPercent":12,"windowDurationMins":10080,"resetsAt":1794474000}}}}
+< {"method":"thread/started","params":{"thread":{"id":"thr_123"}}}
+> {"method":"turn/start","id":2,"params":{"threadId":"thr_123","input":[{"type":"text","text":"Run the proto tests and fix what fails.","text_elements":[]}]}}
+< {"id":2,"result":{"turn":{"id":"turn_456","status":"inProgress","items":[]}}}
+< {"method":"turn/started","params":{"threadId":"thr_123","turn":{"id":"turn_456","status":"inProgress","items":[]}}}
+# the human types a steer message in venom while the turn runs
+> {"method":"turn/steer","id":3,"params":{"threadId":"thr_123","input":[{"type":"text","text":"Only the proto module, not the whole tree.","text_elements":[]}],"expectedTurnId":"turn_456"}}
+< {"id":3,"result":{"turnId":"turn_456"}}
+< {"method":"item/started","params":{"threadId":"thr_123","turnId":"turn_456","item":{"type":"commandExecution","id":"item_7","command":"zig build test -Dmodule=proto","cwd":"$CWD","status":"inProgress","commandActions":[{"type":"unknown","command":"zig build test -Dmodule=proto"}]}}}
+< {"method":"item/commandExecution/outputDelta","params":{"threadId":"thr_123","turnId":"turn_456","itemId":"item_7","delta":"Build Summary"}}
+# a sub-agent's thread and an unknown notification are ignored
+< {"method":"turn/started","params":{"threadId":"thr_other","turn":{"id":"turn_x","status":"inProgress","items":[]}}}
+< {"method":"thread/goal/updated","params":{"threadId":"thr_123","goal":null}}
+# a server request venom does not handle gets a JSON-RPC error
+< {"id":"x1","method":"item/tool/call","params":{"threadId":"thr_123","turnId":"turn_456","tool":"t","arguments":{}}}
+> {"id":"x1","error":{"code":-32601}}
+< {"method":"item/commandExecution/requestApproval","id":50,"params":{"kind":"command","threadId":"thr_123","turnId":"turn_456","itemId":"item_7","startedAtMs":1794052800000,"environmentId":null,"command":"zig build test -Dmodule=proto","cwd":"$CWD"}}
+# ... the human presses a (always) ...
+> {"id":50,"result":{"decision":"accept"}}
+< {"method":"serverRequest/resolved","params":{"threadId":"thr_123","requestId":50}}
+< {"method":"item/completed","params":{"threadId":"thr_123","turnId":"turn_456","item":{"type":"commandExecution","id":"item_7","command":"zig build test -Dmodule=proto","cwd":"$CWD","status":"completed","commandActions":[{"type":"unknown","command":"zig build test -Dmodule=proto"}],"exitCode":0,"durationMs":4210,"aggregatedOutput":"All 112 tests passed.\n"}}}
+< {"method":"item/agentMessage/delta","params":{"threadId":"thr_123","turnId":"turn_456","itemId":"item_8","delta":"All proto"}}
+< {"method":"item/completed","params":{"threadId":"thr_123","turnId":"turn_456","item":{"type":"agentMessage","id":"item_8","text":"All proto tests pass.","phase":null}}}
+< {"method":"thread/tokenUsage/updated","params":{"threadId":"thr_123","turnId":"turn_456","tokenUsage":{"total":{"totalTokens":44270,"inputTokens":43458,"cachedInputTokens":40210,"cacheWriteInputTokens":0,"outputTokens":812,"reasoningOutputTokens":320},"last":{"totalTokens":9100,"inputTokens":8800,"cachedInputTokens":8000,"cacheWriteInputTokens":0,"outputTokens":300,"reasoningOutputTokens":120},"modelContextWindow":272000}}}
+< {"method":"turn/completed","params":{"threadId":"thr_123","turn":{"id":"turn_456","status":"completed","error":null,"items":[],"durationMs":18234}}}
+< {"method":"account/rateLimits/updated","params":{"rateLimits":{"limitId":"codex","primary":{"usedPercent":31,"windowDurationMins":300,"resetsAt":1794063600},"secondary":{"usedPercent":12,"windowDurationMins":10080,"resetsAt":1794474000}}}}

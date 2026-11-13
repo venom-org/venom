@@ -1,0 +1,34 @@
+── turn t1
+› Rename proto.Frame
+  I’ll run the commands and edits in the order you listed.
+
+▾ Explored  2 reads · 1 search · 1 list
+    commandExecution /bin/sh -lc 'cat demo.zig'                  exit 0 · 0.0s
+    pub const greeting = "hello";
+
+    pub fn add(a: i32, b: i32) i32 {
+        return a + b;
+    }
+    commandExecution /bin/sh -lc 'grep -n greeting demo.zig'     exit 0 · 0.0s
+    1:pub const greeting = "hello";
+    commandExecution /bin/sh -lc ls                              exit 0 · 0.0s
+    demo.zig
+    notes.txt
+    commandExecution /bin/sh -lc 'cat notes.txt'                 exit 0 · 0.0s
+    demo
+▾ Edit ×2   /w/demo.zig                                                  +2 −2
+    @@ -1,2 +1,2 @@
+    -pub const greeting = "hello";
+    +pub const greeting = "hi";
+
+    @@ -2,3 +2,3 @@
+
+    -pub fn add(a: i32, b: i32) i32 {
+    +pub fn sum(a: i32, b: i32) i32 {
+         return a + b;
+▾ commandExecution /bin/sh -lc 'ls does-not-exist'               exit 2 · 0.0s
+    ls: cannot access 'does-not-exist': No such file or directory
+▾ commandExecution /bin/sh -lc 'echo ok'                         exit 0 · 0.0s
+    ok
+  Completed in order, including both edits and the expected failure.
+turn t1 completed

@@ -1,0 +1,18 @@
+# Compaction: asked once the thread is open, it runs as a turn.
+> {"method":"initialize","id":0}
+< {"id":0,"result":{"userAgent":"codex_cli_rs/0.167.0 (Linux; x86_64)"}}
+> {"method":"initialized","params":{}}
+> {"method":"thread/start","id":1}
+< {"id":1,"result":{"thread":{"id":"thr_c"},"model":"m"}}
+> {"method":"account/read","id":90}
+< {"id":90,"result":{"account":null,"requiresOpenaiAuth":true}}
+> {"method":"account/rateLimits/read","id":91}
+< {"id":91,"error":{"code":-32600,"message":"rate limits need a ChatGPT sign-in"}}
+> {"method":"turn/start","id":2}
+< {"id":2,"result":{"turn":{"id":"turn_1","status":"inProgress","items":[]}}}
+< {"method":"turn/started","params":{"threadId":"thr_c","turn":{"id":"turn_1","status":"inProgress","items":[]}}}
+< {"method":"turn/completed","params":{"threadId":"thr_c","turn":{"id":"turn_1","status":"completed","error":null,"items":[]}}}
+> {"method":"thread/compact/start","id":3,"params":{"threadId":"thr_c"}}
+< {"id":3,"result":{}}
+< {"method":"turn/started","params":{"threadId":"thr_c","turn":{"id":"turn_2","status":"inProgress","items":[]}}}
+< {"method":"turn/completed","params":{"threadId":"thr_c","turn":{"id":"turn_2","status":"completed","error":null,"items":[]}}}

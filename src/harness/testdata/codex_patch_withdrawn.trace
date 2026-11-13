@@ -1,0 +1,23 @@
+# A patch approval denied, then an exec approval the harness withdraws.
+> {"method":"initialize","id":0}
+< {"id":0,"result":{"userAgent":"codex_cli_rs/0.167.0"}}
+> {"method":"initialized"}
+> {"method":"thread/start","id":1}
+< {"id":1,"result":{"thread":{"id":"thr_p"},"model":"gpt-5.5-codex"}}
+> {"method":"account/read","id":90}
+< {"id":90,"result":{"account":null,"requiresOpenaiAuth":true}}
+> {"method":"account/rateLimits/read","id":91}
+< {"id":91,"error":{"code":-32600,"message":"rate limits need a ChatGPT sign-in"}}
+> {"method":"turn/start","id":2}
+< {"method":"turn/started","params":{"threadId":"thr_p","turn":{"id":"turn_1","status":"inProgress","items":[]}}}
+< {"method":"item/started","params":{"threadId":"thr_p","turnId":"turn_1","item":{"type":"fileChange","id":"fc_1","changes":[{"path":"src/proto.zig","kind":{"type":"update"},"diff":"@@"}],"status":"inProgress"}}}
+< {"method":"item/fileChange/requestApproval","id":7,"params":{"threadId":"thr_p","turnId":"turn_1","itemId":"fc_1","startedAtMs":1,"reason":"Edit src/proto.zig"}}
+> {"id":7,"result":{"decision":"decline"}}
+< {"method":"serverRequest/resolved","params":{"threadId":"thr_p","requestId":7}}
+< {"method":"item/completed","params":{"threadId":"thr_p","turnId":"turn_1","item":{"type":"fileChange","id":"fc_1","changes":[{"path":"src/proto.zig","kind":{"type":"update"},"diff":"@@"}],"status":"declined"}}}
+< {"method":"item/started","params":{"threadId":"thr_p","turnId":"turn_1","item":{"type":"commandExecution","id":"ce_2","command":"rm -rf zig-out","cwd":"$CWD","status":"inProgress","commandActions":[]}}}
+< {"method":"item/commandExecution/requestApproval","id":8,"params":{"kind":"command","threadId":"thr_p","turnId":"turn_1","itemId":"ce_2","startedAtMs":2,"command":"rm -rf zig-out","cwd":"$CWD","proposedExecpolicyAmendment":["rm","-rf"]}}
+< {"method":"serverRequest/resolved","params":{"threadId":"thr_p","requestId":8}}
+< {"method":"item/completed","params":{"threadId":"thr_p","turnId":"turn_1","item":{"type":"commandExecution","id":"ce_2","command":"rm -rf zig-out","cwd":"$CWD","status":"declined","commandActions":[]}}}
+< {"method":"item/completed","params":{"threadId":"thr_p","turnId":"turn_1","item":{"type":"agentMessage","id":"m_3","text":"Stopped."}}}
+< {"method":"turn/completed","params":{"threadId":"thr_p","turn":{"id":"turn_1","status":"completed","error":null,"items":[]}}}

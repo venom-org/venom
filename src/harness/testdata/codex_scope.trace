@@ -1,0 +1,48 @@
+# A scoped agent: the thread runs under venom's permission profile.
+# An in-scope patch needs no approval. A patch with a path outside the scope
+# asks, though its first path (the title) is in scope, and so does one that
+# moves a file out.
+> {"method":"initialize","id":0}
+< {"id":0,"result":{"userAgent":"codex_cli_rs/0.167.0"}}
+> {"method":"initialized"}
+> {"method":"thread/start","id":1,"params":{"cwd":"$CWD","approvalPolicy":"on-request","config":{"default_permissions":"venom_scope","permissions":{"venom_scope":{"filesystem":{":root":"read",":tmpdir":"write","$CWD/a":"write","$CWD/c":"read"}}}}}}
+< {"id":1,"result":{"thread":{"id":"thr_s"},"model":"gpt-5.5-codex","activePermissionProfile":{"id":"venom_scope","extends":null}}}
+> {"method":"account/read","id":90}
+< {"id":90,"result":{"account":null,"requiresOpenaiAuth":true}}
+> {"method":"account/rateLimits/read","id":91}
+< {"id":91,"error":{"code":-32600,"message":"rate limits need a ChatGPT sign-in"}}
+> {"method":"turn/start","id":2}
+< {"method":"turn/started","params":{"threadId":"thr_s","turn":{"id":"turn_1","status":"inProgress","items":[]}}}
+< {"method":"item/started","params":{"threadId":"thr_s","turnId":"turn_1","item":{"type":"fileChange","id":"fc_1","changes":[{"path":"$CWD/a/x.zig","kind":{"type":"update"},"diff":"@@"}],"status":"inProgress"}}}
+< {"method":"item/completed","params":{"threadId":"thr_s","turnId":"turn_1","item":{"type":"fileChange","id":"fc_1","changes":[{"path":"$CWD/a/x.zig","kind":{"type":"update"},"diff":"@@"}],"status":"completed"}}}
+< {"method":"item/started","params":{"threadId":"thr_s","turnId":"turn_1","item":{"type":"fileChange","id":"fc_2","changes":[{"path":"$CWD/a/y.zig","kind":{"type":"update"},"diff":"@@"},{"path":"c/z.zig","kind":{"type":"add"},"diff":"+z"}],"status":"inProgress"}}}
+< {"method":"item/fileChange/requestApproval","id":7,"params":{"threadId":"thr_s","turnId":"turn_1","itemId":"fc_2","startedAtMs":1}}
+> {"id":7,"result":{"decision":"decline"}}
+< {"method":"serverRequest/resolved","params":{"threadId":"thr_s","requestId":7}}
+< {"method":"item/completed","params":{"threadId":"thr_s","turnId":"turn_1","item":{"type":"fileChange","id":"fc_2","changes":[{"path":"$CWD/a/y.zig","kind":{"type":"update"},"diff":"@@"},{"path":"c/z.zig","kind":{"type":"add"},"diff":"+z"}],"status":"declined"}}}
+< {"method":"item/started","params":{"threadId":"thr_s","turnId":"turn_1","item":{"type":"fileChange","id":"fc_3","changes":[{"path":"a/m.zig","kind":{"type":"update","move_path":"c/m.zig"},"diff":""}],"status":"inProgress"}}}
+< {"method":"item/fileChange/requestApproval","id":8,"params":{"threadId":"thr_s","turnId":"turn_1","itemId":"fc_3","startedAtMs":2}}
+> {"id":8,"result":{"decision":"decline"}}
+< {"method":"serverRequest/resolved","params":{"threadId":"thr_s","requestId":8}}
+< {"method":"item/completed","params":{"threadId":"thr_s","turnId":"turn_1","item":{"type":"fileChange","id":"fc_3","changes":[{"path":"a/m.zig","kind":{"type":"update","move_path":"c/m.zig"},"diff":""}],"status":"declined"}}}
+< {"method":"item/started","params":{"threadId":"thr_s","turnId":"turn_1","item":{"type":"commandExecution","id":"ce_4","command":"cp a/x a/y","cwd":"$CWD","status":"inProgress","commandActions":[]}}}
+< {"method":"item/commandExecution/requestApproval","id":9,"params":{"threadId":"thr_s","turnId":"turn_1","itemId":"ce_4","startedAtMs":3,"command":"cp a/x a/y","cwd":"$CWD","proposedExecpolicyAmendment":["cp"]}}
+# Allow always: a plain accept, no rule for codex.
+> {"id":9,"result":{"decision":"accept"}}
+< {"method":"serverRequest/resolved","params":{"threadId":"thr_s","requestId":9}}
+< {"method":"item/completed","params":{"threadId":"thr_s","turnId":"turn_1","item":{"type":"commandExecution","id":"ce_4","command":"cp a/x a/y","cwd":"$CWD","status":"completed","commandActions":[],"exitCode":0}}}
+< {"method":"turn/completed","params":{"threadId":"thr_s","turn":{"id":"turn_1","status":"completed","error":null,"items":[]}}}
+=== process
+# Reattached: thread/resume carries the same profile.
+> {"method":"initialize","id":0}
+< {"id":0,"result":{"userAgent":"codex_cli_rs/0.167.0"}}
+> {"method":"initialized"}
+> {"method":"thread/resume","id":1,"params":{"excludeTurns":true,"threadId":"thr_s","cwd":"$CWD","config":{"default_permissions":"venom_scope","permissions":{"venom_scope":{"filesystem":{":root":"read","$CWD/a":"write","$CWD/c":"read"}}}}}}
+< {"id":1,"result":{"thread":{"id":"thr_s"},"model":"gpt-5.5-codex","activePermissionProfile":{"id":"venom_scope","extends":null}}}
+> {"method":"account/read","id":90}
+< {"id":90,"result":{"account":null,"requiresOpenaiAuth":true}}
+> {"method":"account/rateLimits/read","id":91}
+< {"id":91,"error":{"code":-32600,"message":"rate limits need a ChatGPT sign-in"}}
+> {"method":"turn/start","id":2}
+< {"method":"turn/started","params":{"threadId":"thr_s","turn":{"id":"turn_2","status":"inProgress","items":[]}}}
+< {"method":"turn/completed","params":{"threadId":"thr_s","turn":{"id":"turn_2","status":"completed","error":null,"items":[]}}}

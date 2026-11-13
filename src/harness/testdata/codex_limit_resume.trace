@@ -1,0 +1,39 @@
+# A usage limit, a turn/start error, an interrupt, release, then reattach
+# with thread/resume (usage re-based on the first report).
+> {"method":"initialize","id":0}
+< {"id":0,"result":{"userAgent":"codex_cli_rs/0.167.0"}}
+> {"method":"initialized"}
+> {"method":"thread/start","id":1,"params":{"cwd":"$CWD"}}
+< {"id":1,"result":{"thread":{"id":"thr_9"},"model":"gpt-5.5-codex"}}
+> {"method":"account/read","id":90}
+< {"id":90,"result":{"account":{"type":"chatgpt","email":null,"planType":"plus"},"requiresOpenaiAuth":true}}
+> {"method":"account/rateLimits/read","id":91}
+< {"id":91,"error":{"code":-32600,"message":"rate limits need a ChatGPT sign-in"}}
+> {"method":"turn/start","id":2,"params":{"threadId":"thr_9","input":[{"type":"text","text":"first"}]}}
+< {"method":"turn/started","params":{"threadId":"thr_9","turn":{"id":"turn_a","status":"inProgress","items":[]}}}
+< {"method":"thread/tokenUsage/updated","params":{"threadId":"thr_9","turnId":"turn_a","tokenUsage":{"total":{"inputTokens":100,"cachedInputTokens":0,"cacheWriteInputTokens":0,"outputTokens":10},"last":{"inputTokens":100,"cachedInputTokens":0,"cacheWriteInputTokens":0,"outputTokens":10},"modelContextWindow":272000}}}
+< {"method":"account/rateLimits/updated","params":{"rateLimits":{"limitId":"codex","primary":{"usedPercent":100,"windowDurationMins":300,"resetsAt":1794063600},"secondary":{"usedPercent":40,"windowDurationMins":10080,"resetsAt":1794474000}}}}
+< {"method":"error","params":{"threadId":"thr_9","turnId":"turn_a","willRetry":false,"error":{"message":"You've hit your usage limit.","codexErrorInfo":"usageLimitExceeded","additionalDetails":null}}}
+< {"method":"turn/completed","params":{"threadId":"thr_9","turn":{"id":"turn_a","status":"failed","error":null,"items":[]}}}
+> {"method":"turn/start","id":3,"params":{"threadId":"thr_9","input":[{"type":"text","text":"second"}]}}
+< {"id":3,"error":{"code":-32600,"message":"bad request"}}
+> {"method":"turn/start","id":4,"params":{"threadId":"thr_9","input":[{"type":"text","text":"long"}]}}
+< {"method":"turn/started","params":{"threadId":"thr_9","turn":{"id":"turn_c","status":"inProgress","items":[]}}}
+< {"method":"item/started","params":{"threadId":"thr_9","turnId":"turn_c","item":{"type":"commandExecution","id":"item_1","command":"sleep 100","cwd":"$CWD","status":"inProgress","commandActions":[]}}}
+> {"method":"turn/interrupt","id":5,"params":{"threadId":"thr_9","turnId":"turn_c"}}
+< {"id":5,"result":{}}
+< {"method":"turn/completed","params":{"threadId":"thr_9","turn":{"id":"turn_c","status":"interrupted","error":null,"items":[]}}}
+=== process
+> {"method":"initialize","id":0}
+< {"id":0,"result":{"userAgent":"codex_cli_rs/0.167.0"}}
+> {"method":"initialized"}
+> {"method":"thread/resume","id":1,"params":{"threadId":"thr_9","cwd":"$CWD","excludeTurns":true}}
+< {"id":1,"result":{"thread":{"id":"thr_9"},"model":"gpt-5.5-codex"}}
+> {"method":"account/read","id":90}
+< {"id":90,"result":{"account":{"type":"chatgpt","email":null,"planType":"plus"},"requiresOpenaiAuth":true}}
+> {"method":"account/rateLimits/read","id":91}
+< {"id":91,"error":{"code":-32600,"message":"rate limits need a ChatGPT sign-in"}}
+> {"method":"turn/start","id":2,"params":{"threadId":"thr_9","input":[{"type":"text","text":"again"}]}}
+< {"method":"turn/started","params":{"threadId":"thr_9","turn":{"id":"turn_d","status":"inProgress","items":[]}}}
+< {"method":"thread/tokenUsage/updated","params":{"threadId":"thr_9","turnId":"turn_d","tokenUsage":{"total":{"inputTokens":1000,"cachedInputTokens":400,"cacheWriteInputTokens":0,"outputTokens":50},"last":{"inputTokens":300,"cachedInputTokens":100,"cacheWriteInputTokens":0,"outputTokens":20},"modelContextWindow":272000}}}
+< {"method":"turn/completed","params":{"threadId":"thr_9","turn":{"id":"turn_d","status":"completed","error":null,"items":[]}}}

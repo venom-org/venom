@@ -1,0 +1,45 @@
+# "Allow always" stays in venom's grants: every request is answered
+# allow_always and codex gets a plain accept, whatever rule it proposes.
+> {"method":"initialize","id":0}
+< {"id":0,"result":{"userAgent":"codex_cli_rs/0.167.0"}}
+> {"method":"initialized"}
+> {"method":"thread/start","id":1}
+< {"id":1,"result":{"thread":{"id":"thr_a"},"model":"gpt-5.5-codex"}}
+> {"method":"account/read","id":90}
+< {"id":90,"result":{"account":null,"requiresOpenaiAuth":true}}
+> {"method":"account/rateLimits/read","id":91}
+< {"id":91,"error":{"code":-32600,"message":"rate limits need a ChatGPT sign-in"}}
+> {"method":"turn/start","id":2}
+< {"method":"turn/started","params":{"threadId":"thr_a","turn":{"id":"turn_1","status":"inProgress","items":[]}}}
+# a shell: venom keeps the exact command, so codex's ["bash"] is not sent
+< {"method":"item/started","params":{"threadId":"thr_a","turnId":"turn_1","item":{"type":"commandExecution","id":"ce_1","command":"bash scripts/check.sh","cwd":"$CWD","status":"inProgress","commandActions":[]}}}
+< {"method":"item/commandExecution/requestApproval","id":60,"params":{"kind":"command","threadId":"thr_a","turnId":"turn_1","itemId":"ce_1","startedAtMs":1,"command":"bash scripts/check.sh","cwd":"$CWD","proposedExecpolicyAmendment":["bash"]}}
+> {"id":60,"result":{"decision":"accept"}}
+< {"method":"serverRequest/resolved","params":{"threadId":"thr_a","requestId":60}}
+< {"method":"item/completed","params":{"threadId":"thr_a","turnId":"turn_1","item":{"type":"commandExecution","id":"ce_1","command":"bash scripts/check.sh","cwd":"$CWD","status":"completed","commandActions":[],"exitCode":0}}}
+# venom grants exec:zig; codex's ["zig"] is exactly that grant: sent
+< {"method":"item/started","params":{"threadId":"thr_a","turnId":"turn_1","item":{"type":"commandExecution","id":"ce_2","command":"zig build test","cwd":"$CWD","status":"inProgress","commandActions":[]}}}
+< {"method":"item/commandExecution/requestApproval","id":61,"params":{"kind":"command","threadId":"thr_a","turnId":"turn_1","itemId":"ce_2","startedAtMs":2,"command":"zig build test","cwd":"$CWD","proposedExecpolicyAmendment":["zig"]}}
+> {"id":61,"result":{"decision":"accept"}}
+< {"method":"serverRequest/resolved","params":{"threadId":"thr_a","requestId":61}}
+< {"method":"item/completed","params":{"threadId":"thr_a","turnId":"turn_1","item":{"type":"commandExecution","id":"ce_2","command":"zig build test","cwd":"$CWD","status":"completed","commandActions":[],"exitCode":0}}}
+# destructive: narrowed to the exact argv; even an exact-argv prefix rule
+# would match longer commands, so plain accept
+< {"method":"item/started","params":{"threadId":"thr_a","turnId":"turn_1","item":{"type":"commandExecution","id":"ce_3","command":"rm -rf zig-out","cwd":"$CWD","status":"inProgress","commandActions":[]}}}
+< {"method":"item/commandExecution/requestApproval","id":62,"params":{"kind":"command","threadId":"thr_a","turnId":"turn_1","itemId":"ce_3","startedAtMs":3,"command":"rm -rf zig-out","cwd":"$CWD","proposedExecpolicyAmendment":["rm","-rf","zig-out"]}}
+> {"id":62,"result":{"decision":"accept"}}
+< {"method":"serverRequest/resolved","params":{"threadId":"thr_a","requestId":62}}
+< {"method":"item/completed","params":{"threadId":"thr_a","turnId":"turn_1","item":{"type":"commandExecution","id":"ce_3","command":"rm -rf zig-out","cwd":"$CWD","status":"completed","commandActions":[],"exitCode":0}}}
+# venom grants exec:git status; codex's ["git"] is broader: not sent
+< {"method":"item/started","params":{"threadId":"thr_a","turnId":"turn_1","item":{"type":"commandExecution","id":"ce_4","command":"git status --short","cwd":"$CWD","status":"inProgress","commandActions":[]}}}
+< {"method":"item/commandExecution/requestApproval","id":63,"params":{"kind":"command","threadId":"thr_a","turnId":"turn_1","itemId":"ce_4","startedAtMs":4,"command":"git status --short","cwd":"$CWD","proposedExecpolicyAmendment":["git"]}}
+> {"id":63,"result":{"decision":"accept"}}
+< {"method":"serverRequest/resolved","params":{"threadId":"thr_a","requestId":63}}
+< {"method":"item/completed","params":{"threadId":"thr_a","turnId":"turn_1","item":{"type":"commandExecution","id":"ce_4","command":"git status --short","cwd":"$CWD","status":"completed","commandActions":[],"exitCode":0}}}
+# a patch: venom's edit grant; codex gets accept, not acceptForSession
+< {"method":"item/started","params":{"threadId":"thr_a","turnId":"turn_1","item":{"type":"fileChange","id":"fc_5","changes":[{"path":"src/proto.zig","kind":{"type":"update"},"diff":"@@"}],"status":"inProgress"}}}
+< {"method":"item/fileChange/requestApproval","id":64,"params":{"threadId":"thr_a","turnId":"turn_1","itemId":"fc_5","startedAtMs":5,"reason":"Edit src/proto.zig"}}
+> {"id":64,"result":{"decision":"accept"}}
+< {"method":"serverRequest/resolved","params":{"threadId":"thr_a","requestId":64}}
+< {"method":"item/completed","params":{"threadId":"thr_a","turnId":"turn_1","item":{"type":"fileChange","id":"fc_5","changes":[{"path":"src/proto.zig","kind":{"type":"update"},"diff":"@@"}],"status":"completed"}}}
+< {"method":"turn/completed","params":{"threadId":"thr_a","turn":{"id":"turn_1","status":"completed","error":null,"items":[]}}}

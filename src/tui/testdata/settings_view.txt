@@ -1,0 +1,32 @@
+╭ Settings ────────────────╮╭ 02 Agents ───────────────────────────────────────────────╮╭ ~/.config/venom/config.zon ─────────── 1 unsaved ╮
+│ 00 General               ││   Harness                                  claude_code ▾ ││           .mode = .ask,                          │
+│ 01 Workspaces            ││   agents.default · For a new agent when none is named.   ││           .isolation = .worktree,                │
+│ 02 Agents                ││   Permission mode                                  ask ▾ ││ -         .max_concurrent = 4,                   │
+│ 03 Models and limits     ││   agents.mode · Ask, accept edits or plan first. Grants… ││ +         .max_concurrent = 6,                   │
+│ 04 Permissions and gran… ││   Isolation                                   worktree ▾ ││           .spawn = .{                            │
+│ 05 Worktrees             ││   agents.isolation · A worktree per agent per repo, in … ││               .allow = true,                     │
+│ 06 Attention             ││ ● Max concurrent agents                                6 ││                                                  │
+│ 07 Transcript            ││   agents.max_concurrent · Extra spawns queue; children … ││ Same change from a shell                         │
+│ 08 Usage and budgets     ││   Allow agents to spawn agents                      [on] ││ venom config set --key=agents.max_concurrent     │
+│ 09 Appearance            ││   agents.spawn.allow · Through venom's MCP server.       ││ --value=6                                        │
+│ 10 Keys                  ││   Max tree depth                                       2 ││                                                  │
+│ 11 Integrations          ││   agents.spawn.depth · Below a top-level agent.          ││ Checks                                           │
+│ 12 Raw config            ││   Child agents in the list                        tree ▾ ││ ● config valid                                   │
+│                          ││   ui.children · Tree, folded to one line, or hidden.     ││                                                  │
+│ Layer  user  (S)         ││   Archive settled agents after                        3d ││ u undo  ⌃s save and reload                       │
+│                          ││   agents.archive_after · Archived agents keep transcrip… ││                                                  │
+│ The narrower file wins;  ││ ● claude-code  2.4.1 · signed in                         ││                                                  │
+│ ● set in this layer.     ││   Max plan                                               ││                                                  │
+│                          ││ ▲ codex  0.71.0 · not signed in                          ││                                                  │
+│                          ││   codex login                                            ││                                                  │
+│                          ││                                                          ││                                                  │
+│                          ││                                                          ││                                                  │
+│                          ││                                                          ││                                                  │
+│                          ││                                                          ││                                                  │
+│                          ││                                                          ││                                                  │
+│                          ││                                                          ││                                                  │
+│                          ││                                                          ││                                                  │
+│                          ││                                                          ││                                                  │
+│                          ││                                                          ││                                                  │
+╰──────────────────────────╯╰──────────────────────────────────────────────────────────╯╰──────────────────────────────────────────────────╯
+ ▲ 0 need you · ◆ 0 running │ no agents │ NORMAL        j k move  ⇥ next pane  ⏎ edit  h l step  S layer  u undo  ⌃s save  esc back  ? keys

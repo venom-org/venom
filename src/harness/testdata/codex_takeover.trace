@@ -1,0 +1,44 @@
+# Take-over: one protocol turn; the short-lived app-server of the
+# catch-up, listing the turn the TUI ran above the one venom knows; then the
+# reattach, whose replayed total only re-bases.
+> {"method":"initialize","id":0}
+< {"id":0,"result":{"userAgent":"codex_cli_rs/0.167.0 (Linux; x86_64)"}}
+> {"method":"initialized","params":{}}
+> {"method":"thread/start","id":1}
+< {"id":1,"result":{"thread":{"id":"thr_t"},"model":"gpt-x"}}
+> {"method":"account/read","id":90}
+< {"id":90,"result":{"account":null,"requiresOpenaiAuth":true}}
+> {"method":"account/rateLimits/read","id":91}
+< {"id":91,"error":{"code":-32600,"message":"rate limits need a ChatGPT sign-in"}}
+> {"method":"turn/start","id":2}
+< {"id":2,"result":{"turn":{"id":"turn_1","status":"inProgress","items":[]}}}
+< {"method":"turn/started","params":{"threadId":"thr_t","turn":{"id":"turn_1","status":"inProgress","items":[]}}}
+< {"method":"item/completed","params":{"threadId":"thr_t","turnId":"turn_1","item":{"type":"agentMessage","id":"m1","text":"Tests pass."}}}
+< {"method":"thread/tokenUsage/updated","params":{"threadId":"thr_t","turnId":"turn_1","tokenUsage":{"total":{"inputTokens":100,"cachedInputTokens":40,"cacheWriteInputTokens":0,"outputTokens":5},"last":{"inputTokens":100,"cachedInputTokens":40,"cacheWriteInputTokens":0,"outputTokens":5},"modelContextWindow":1000}}}
+< {"method":"turn/completed","params":{"threadId":"thr_t","turn":{"id":"turn_1","status":"completed","items":[]}}}
+=== process
+> {"method":"initialize","id":0}
+< {"id":0,"result":{"userAgent":"codex_cli_rs/0.167.0 (Linux; x86_64)"}}
+> {"method":"initialized","params":{}}
+> {"method":"thread/turns/list","id":1,"params":{"threadId":"thr_t","sortDirection":"desc","itemsView":"full"}}
+< {"method":"remoteControl/status/changed","params":{"status":"disabled"}}
+< {"id":1,"result":{"data":[{"id":"turn_2","status":"completed","error":null,"startedAt":4102444800,"items":[{"type":"userMessage","id":"u2","content":[{"type":"text","text":"Add a changelog entry","text_elements":[]}]},{"type":"commandExecution","id":"c2","command":"git status","cwd":"$CWD","status":"completed","commandActions":[],"exitCode":0,"durationMs":12,"aggregatedOutput":"clean\n"},{"type":"reasoning","id":"r2"},{"type":"agentMessage","id":"m2","text":"Done natively."}]},{"id":"turn_1","status":"completed","error":null,"startedAt":4102444000,"items":[]}],"nextCursor":"more","backwardsCursor":null}}
+> {"method":"thread/read","id":2,"params":{"threadId":"thr_t","includeTurns":false}}
+< {"id":2,"result":{"thread":{"id":"thr_t","model":"gpt-x","path":"$CWD/rollout.jsonl"}}}
+=== process
+> {"method":"initialize","id":0}
+< {"id":0,"result":{"userAgent":"codex_cli_rs/0.167.0 (Linux; x86_64)"}}
+> {"method":"initialized","params":{}}
+> {"method":"thread/resume","id":1,"params":{"threadId":"thr_t","excludeTurns":true}}
+< {"id":1,"result":{"thread":{"id":"thr_t"},"model":"gpt-x"}}
+< {"method":"thread/tokenUsage/updated","params":{"threadId":"thr_t","turnId":"turn_2","tokenUsage":{"total":{"inputTokens":150,"cachedInputTokens":60,"cacheWriteInputTokens":0,"outputTokens":9},"last":{"inputTokens":50,"cachedInputTokens":20,"cacheWriteInputTokens":0,"outputTokens":4},"modelContextWindow":1000}}}
+> {"method":"account/read","id":90}
+< {"id":90,"result":{"account":null,"requiresOpenaiAuth":true}}
+> {"method":"account/rateLimits/read","id":91}
+< {"id":91,"error":{"code":-32600,"message":"rate limits need a ChatGPT sign-in"}}
+> {"method":"turn/start","id":2}
+< {"id":2,"result":{"turn":{"id":"turn_3","status":"inProgress","items":[]}}}
+< {"method":"turn/started","params":{"threadId":"thr_t","turn":{"id":"turn_3","status":"inProgress","items":[]}}}
+< {"method":"item/completed","params":{"threadId":"thr_t","turnId":"turn_3","item":{"type":"agentMessage","id":"m3","text":"Back in venom."}}}
+< {"method":"thread/tokenUsage/updated","params":{"threadId":"thr_t","turnId":"turn_3","tokenUsage":{"total":{"inputTokens":170,"cachedInputTokens":60,"cacheWriteInputTokens":0,"outputTokens":10},"last":{"inputTokens":20,"cachedInputTokens":0,"cacheWriteInputTokens":0,"outputTokens":1},"modelContextWindow":1000}}}
+< {"method":"turn/completed","params":{"threadId":"thr_t","turn":{"id":"turn_3","status":"completed","items":[]}}}

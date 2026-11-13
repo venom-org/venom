@@ -1,0 +1,22 @@
+.{
+    .agents = .{
+        .default = .claude_code,
+        .mode = .ask,
+        .isolation = .worktree,
+        .max_concurrent = 6,
+        .spawn = .{ .allow = true, .depth = 2 },
+        .archive_after = "3d",
+    },
+    .attention = .{
+        .bell = true,
+        .notify_after = "2m",
+        .approval_timeout = null,
+    },
+    .ui = .{
+        .chrome = .auto,
+        .group_by = .state,
+        .children = .tree,
+        .transcript = .{ .density = .normal, .open_running_after = "5s" },
+        .context = .{ .warn_at = 80 },
+    },
+}

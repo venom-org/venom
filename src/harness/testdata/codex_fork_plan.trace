@@ -1,0 +1,61 @@
+# Plan windows from account/read, account/rateLimits/read and sparse
+# updates; capped tool bodies; thread/fork through a named turn and from the
+# head, refused, timed out, answered late, and from an idle agent (reattach).
+> {"method":"initialize","id":0}
+< {"id":0,"result":{"userAgent":"codex_cli_rs/0.167.0"}}
+> {"method":"initialized"}
+> {"method":"thread/start","id":1,"params":{"cwd":"$CWD"}}
+< {"id":1,"result":{"thread":{"id":"thr_f"},"model":"gpt-5.5-codex"}}
+> {"method":"account/read","id":90}
+< {"id":90,"result":{"account":{"type":"chatgpt","email":"someone@example.com","planType":"plus"},"requiresOpenaiAuth":true}}
+> {"method":"account/rateLimits/read","id":91}
+< {"id":91,"result":{"rateLimits":{"limitId":"codex","primary":{"usedPercent":31,"windowDurationMins":300,"resetsAt":1794063600},"secondary":{"usedPercent":12,"windowDurationMins":10080,"resetsAt":1794474000}}}}
+> {"method":"turn/start","id":2,"params":{"threadId":"thr_f","input":[{"type":"text","text":"one"}]}}
+< {"method":"turn/started","params":{"threadId":"thr_f","turn":{"id":"turn_a","status":"inProgress","items":[]}}}
+< {"method":"item/completed","params":{"threadId":"thr_f","turnId":"turn_a","item":{"type":"commandExecution","id":"item_1","command":"seq 9","cwd":"$CWD","status":"completed","commandActions":[],"exitCode":0,"durationMs":3,"aggregatedOutput":"0123456789abcdef"}}}
+< {"method":"item/completed","params":{"threadId":"thr_f","turnId":"turn_a","item":{"type":"fileChange","id":"item_2","status":"completed","changes":[{"path":"a.zig","kind":"update","diff":"+one\n+two\n"}]}}}
+< {"method":"thread/tokenUsage/updated","params":{"threadId":"thr_f","turnId":"turn_a","tokenUsage":{"total":{"inputTokens":100,"cachedInputTokens":0,"cacheWriteInputTokens":0,"outputTokens":10},"last":{"inputTokens":100,"cachedInputTokens":0,"cacheWriteInputTokens":0,"outputTokens":10},"modelContextWindow":272000}}}
+< {"method":"account/rateLimits/updated","params":{"rateLimits":{"limitId":"codex","primary":{"usedPercent":40,"windowDurationMins":300,"resetsAt":1794063600}}}}
+< {"method":"account/rateLimits/updated","params":{"rateLimits":{"limitId":"other_bucket","primary":{"usedPercent":99,"windowDurationMins":60,"resetsAt":1794000000}}}}
+< {"method":"turn/completed","params":{"threadId":"thr_f","turn":{"id":"turn_a","status":"completed","error":null,"items":[]}}}
+> {"method":"turn/start","id":3,"params":{"threadId":"thr_f","input":[{"type":"text","text":"two"}]}}
+< {"method":"turn/started","params":{"threadId":"thr_f","turn":{"id":"turn_b","status":"inProgress","items":[]}}}
+< {"method":"turn/completed","params":{"threadId":"thr_f","turn":{"id":"turn_b","status":"completed","error":null,"items":[]}}}
+# through t1: the harness's id for it
+> {"method":"thread/fork","id":4,"params":{"threadId":"thr_f","lastTurnId":"turn_a","excludeTurns":true}}
+< {"id":4,"result":{"thread":{"id":"thr_at"},"model":"gpt-5.5-codex"}}
+< {"method":"thread/started","params":{"thread":{"id":"thr_at"}}}
+< {"method":"turn/started","params":{"threadId":"thr_at","turn":{"id":"turn_other","status":"inProgress","items":[]}}}
+> {"method":"thread/unsubscribe","id":5,"params":{"threadId":"thr_at"}}
+< {"id":5,"result":{"status":"unsubscribed"}}
+# from the head
+> {"method":"thread/fork","id":6,"params":{"threadId":"thr_f","excludeTurns":true}}
+< {"id":6,"result":{"thread":{"id":"thr_head"}}}
+> {"method":"thread/unsubscribe","id":7,"params":{"threadId":"thr_head"}}
+# refused
+> {"method":"thread/fork","id":8,"params":{"threadId":"thr_f","excludeTurns":true}}
+< {"id":8,"error":{"code":-32600,"message":"no such turn"}}
+# never answered in time: its late answer only lets the new thread go
+> {"method":"thread/fork","id":9,"params":{"threadId":"thr_f","excludeTurns":true}}
+> {"method":"thread/fork","id":10,"params":{"threadId":"thr_f","excludeTurns":true}}
+< {"id":9,"result":{"thread":{"id":"thr_late"}}}
+> {"method":"thread/unsubscribe","id":12,"params":{"threadId":"thr_late"}}
+< {"id":10,"result":{"thread":{"id":"thr_ok"}}}
+> {"method":"thread/unsubscribe","id":11,"params":{"threadId":"thr_ok"}}
+=== process
+> {"method":"initialize","id":0}
+< {"id":0,"result":{"userAgent":"codex_cli_rs/0.167.0"}}
+> {"method":"initialized"}
+> {"method":"thread/resume","id":1,"params":{"threadId":"thr_f","cwd":"$CWD","excludeTurns":true}}
+< {"id":1,"result":{"thread":{"id":"thr_f"},"model":"gpt-5.5-codex"}}
+> {"method":"account/read","id":90}
+< {"id":90,"result":{"account":{"type":"chatgpt","email":"someone@example.com","planType":"plus"},"requiresOpenaiAuth":true}}
+> {"method":"account/rateLimits/read","id":91}
+< {"id":91,"result":{"rateLimits":{"limitId":"codex","primary":{"usedPercent":40,"windowDurationMins":300,"resetsAt":1794063600},"secondary":{"usedPercent":12,"windowDurationMins":10080,"resetsAt":1794474000}}}}
+> {"method":"thread/fork","id":2,"params":{"threadId":"thr_f","excludeTurns":true}}
+< {"id":2,"result":{"thread":{"id":"thr_idle"}}}
+> {"method":"thread/unsubscribe","id":3,"params":{"threadId":"thr_idle"}}
+=== process
+# The process started for a fork crashes: it is not restarted.
+> {"method":"initialize","id":0}
+! exit 1

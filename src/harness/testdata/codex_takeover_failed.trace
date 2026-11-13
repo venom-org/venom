@@ -1,0 +1,22 @@
+# Take-over: the catch-up's app-server cannot list the thread.
+> {"method":"initialize","id":0}
+< {"id":0,"result":{"userAgent":"codex_cli_rs/0.167.0 (Linux; x86_64)"}}
+> {"method":"initialized","params":{}}
+> {"method":"thread/start","id":1}
+< {"id":1,"result":{"thread":{"id":"thr_t"},"model":"gpt-x"}}
+> {"method":"account/read","id":90}
+< {"id":90,"result":{"account":null,"requiresOpenaiAuth":true}}
+> {"method":"account/rateLimits/read","id":91}
+< {"id":91,"error":{"code":-32600,"message":"rate limits need a ChatGPT sign-in"}}
+> {"method":"turn/start","id":2}
+< {"id":2,"result":{"turn":{"id":"turn_1","status":"inProgress","items":[]}}}
+< {"method":"turn/started","params":{"threadId":"thr_t","turn":{"id":"turn_1","status":"inProgress","items":[]}}}
+< {"method":"item/completed","params":{"threadId":"thr_t","turnId":"turn_1","item":{"type":"agentMessage","id":"m1","text":"Tests pass."}}}
+< {"method":"thread/tokenUsage/updated","params":{"threadId":"thr_t","turnId":"turn_1","tokenUsage":{"total":{"inputTokens":100,"cachedInputTokens":40,"cacheWriteInputTokens":0,"outputTokens":5},"last":{"inputTokens":100,"cachedInputTokens":40,"cacheWriteInputTokens":0,"outputTokens":5},"modelContextWindow":1000}}}
+< {"method":"turn/completed","params":{"threadId":"thr_t","turn":{"id":"turn_1","status":"completed","items":[]}}}
+=== process
+> {"method":"initialize","id":0}
+< {"id":0,"result":{"userAgent":"codex_cli_rs/0.167.0 (Linux; x86_64)"}}
+> {"method":"initialized","params":{}}
+> {"method":"thread/turns/list","id":1,"params":{"threadId":"thr_t"}}
+< {"id":1,"error":{"code":-32600,"message":"no rollout found for thread"}}

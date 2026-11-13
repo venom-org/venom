@@ -1,0 +1,18 @@
+── turn t1
+› Rename proto.Frame
+  I’ll run the commands and edits in the order you listed.
+
+▸ Explored  2 reads · 1 search · 1 list
+▾ Edit ×2   /w/demo.zig                                                  +2 −2
+    @@ -1,2 +1,2 @@
+    -pub const greeting = "hello";
+    +pub const greeting = "hi";
+
+    @@ -2,3 +2,3 @@
+
+    … 3 more lines
+▾ commandExecution /bin/sh -lc 'ls does-not-exist'               exit 2 · 0.0s
+    ls: cannot access 'does-not-exist': No such file or directory
+▸ commandExecution /bin/sh -lc 'echo ok'                         exit 0 · 0.0s
+  Completed in order, including both edits and the expected failure.
+turn t1 completed

@@ -1,0 +1,28 @@
+#!/bin/sh
+# A fake `claude` for tests: just what `venom doctor` and `venom
+# harness list` run. The conformance suite gets it first on PATH, so no test
+# reaches the real CLI. With $VENOM_FAKE_HARNESS_STATE/claude-signed-out it
+# is signed out, and `auth login` signs it in. Only shell builtins and
+# /bin/rm: tests give it a PATH of fakes alone.
+state="${VENOM_FAKE_HARNESS_STATE:-/nonexistent}/claude-signed-out"
+case "$*" in
+--version) echo '2.1.319 (Claude Code)' ;;
+--help)
+    echo 'Usage: claude [options]'
+    echo '  --input-format <format>       Input format'
+    echo '  --permission-prompts <target> Who answers permission prompts'
+    echo '  --session-id <uuid>           Use a specific session ID'
+    ;;
+'auth status --json')
+    if [ -e "$state" ]; then
+        echo '{"loggedIn":false,"authMethod":"none","apiProvider":"firstParty"}'
+        exit 1
+    fi
+    echo '{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"firstParty","email":"fake-secret@example.invalid","orgName":"fake-secret-org","subscriptionType":"max"}'
+    ;;
+'auth login') /bin/rm -f "$state" ;;
+*)
+    echo "fake claude: unexpected arguments: $*" >&2
+    exit 2
+    ;;
+esac

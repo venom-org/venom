@@ -1,0 +1,1262 @@
+.{
+    .format = 1,
+
+    .tool = "venom",
+
+    .summary = "Orchestrate coding agents across workspaces, repos and worktrees",
+
+    .verbs = .{
+        .{
+            .name = "workspace.add",
+            .summary = "Add a folder to venom as a workspace and find its repos",
+            .params = .{
+                .{
+                    .name = "path",
+                    .summary = "Absolute, normalized folder path",
+                    .type = .{
+                        .kind = .string,
+                    },
+                    .required = true,
+                },
+            },
+            .result = .{
+                .kind = .object,
+                .fields = .{
+                    .{
+                        .name = "path",
+                        .summary = "The workspace path",
+                        .type = .{
+                            .kind = .string,
+                        },
+                        .required = true,
+                    },
+                    .{
+                        .name = "added",
+                        .summary = "False when the workspace was already added",
+                        .type = .{
+                            .kind = .boolean,
+                        },
+                        .required = true,
+                    },
+                    .{
+                        .name = "repos",
+                        .summary = "Git roots found in the workspace, sorted by name",
+                        .type = .{
+                            .kind = .array,
+                            .items = .{
+                                .kind = .object,
+                                .fields = .{
+                                    .{
+                                        .name = "name",
+                                        .summary = "Path relative to the workspace (\".\" when the workspace is a repo)",
+                                        .type = .{
+                                            .kind = .string,
+                                        },
+                                        .required = true,
+                                    },
+                                    .{
+                                        .name = "path",
+                                        .summary = "Absolute repo path",
+                                        .type = .{
+                                            .kind = .string,
+                                        },
+                                        .required = true,
+                                    },
+                                },
+                            },
+                        },
+                        .required = true,
+                    },
+                },
+            },
+            .errors = .{
+                .{
+                    .code = "invalid_params.workspace_path",
+                    .summary = "The path is not absolute and normalized, or not a directory",
+                },
+                .{
+                    .code = "not_found.workspace_path",
+                    .summary = "The folder does not exist",
+                },
+                .{
+                    .code = "unavailable.workspace_path",
+                    .summary = "The folder cannot be read",
+                },
+            },
+            .grant = .write,
+            .examples = .{
+                .{
+                    .params = .{ .path = "/home/me/venom-org" },
+                    .result = .{ .path = "/home/me/venom-org", .added = true, .repos = .{.{ .name = "venom", .path = "/home/me/venom-org/venom" }} },
+                },
+            },
+        },
+
+        .{
+            .name = "workspace.list",
+            .summary = "List the workspaces venom knows and their repos",
+            .result = .{
+                .kind = .object,
+                .fields = .{
+                    .{
+                        .name = "workspaces",
+                        .summary = "Workspaces in the order they were added",
+                        .type = .{
+                            .kind = .array,
+                            .items = .{
+                                .kind = .object,
+                                .fields = .{
+                                    .{
+                                        .name = "path",
+                                        .summary = "The workspace path",
+                                        .type = .{
+                                            .kind = .string,
+                                        },
+                                        .required = true,
+                                    },
+                                    .{
+                                        .name = "repos",
+                                        .summary = "Git roots found in the workspace, sorted by name",
+                                        .type = .{
+                                            .kind = .array,
+                                            .items = .{
+                                                .kind = .object,
+                                                .fields = .{
+                                                    .{
+                                                        .name = "name",
+                                                        .summary = "Path relative to the workspace (\".\" when the workspace is a repo)",
+                                                        .type = .{
+                                                            .kind = .string,
+                                                        },
+                                                        .required = true,
+                                                    },
+                                                    .{
+                                                        .name = "path",
+                                                        .summary = "Absolute repo path",
+                                                        .type = .{
+                                                            .kind = .string,
+                                                        },
+                                                        .required = true,
+                                                    },
+                                                    .{ .name = "branch", .summary = "The checked-out branch; absent for a detached HEAD or when git cannot say", .type = .{ .kind = .string } },
+                                                    .{ .name = "dirty", .summary = "The working tree has changes (staged, unstaged or untracked); absent when git cannot say", .type = .{ .kind = .boolean } },
+                                                    .{ .name = "worktrees", .summary = "Linked worktrees of the repo, venom's own included; absent when git cannot say", .type = .{ .kind = .integer, .min = 0 } },
+                                                    .{ .name = "issue", .summary = "The issue number the branch is named for (246-hello-caps is 246); absent when it is not", .type = .{ .kind = .string } },
+                                                },
+                                            },
+                                        },
+                                        .required = true,
+                                    },
+                                },
+                            },
+                        },
+                        .required = true,
+                    },
+                },
+            },
+            .grant = .read,
+            .examples = .{
+                .{
+                    .params = .{},
+                    .result = .{ .workspaces = .{} },
+                },
+            },
+        },
+
+        .{
+            .name = "workspace.remove",
+            .summary = "Forget a workspace; its folder and repos are untouched",
+            .params = .{
+                .{
+                    .name = "path",
+                    .summary = "The workspace path",
+                    .type = .{
+                        .kind = .string,
+                    },
+                    .required = true,
+                },
+            },
+            .result = .{
+                .kind = .object,
+                .fields = .{
+                    .{
+                        .name = "path",
+                        .summary = "The workspace path",
+                        .type = .{
+                            .kind = .string,
+                        },
+                        .required = true,
+                    },
+                    .{
+                        .name = "removed",
+                        .summary = "False when the path was not a workspace",
+                        .type = .{
+                            .kind = .boolean,
+                        },
+                        .required = true,
+                    },
+                },
+            },
+            .grant = .write,
+            .examples = .{
+                .{
+                    .params = .{ .path = "/home/me/scratch" },
+                    .result = .{ .path = "/home/me/scratch", .removed = true },
+                },
+            },
+        },
+
+        .{
+            .name = "workspace.scan",
+            .summary = "Find the repos of one workspace, or of all of them, again",
+            .params = .{
+                .{
+                    .name = "path",
+                    .summary = "The workspace to scan; all workspaces when omitted",
+                    .type = .{
+                        .kind = .string,
+                    },
+                },
+            },
+            .result = .{
+                .kind = .object,
+                .fields = .{
+                    .{
+                        .name = "workspaces",
+                        .summary = "The scanned workspaces",
+                        .type = .{
+                            .kind = .array,
+                            .items = .{
+                                .kind = .object,
+                                .fields = .{
+                                    .{
+                                        .name = "path",
+                                        .summary = "The workspace path",
+                                        .type = .{
+                                            .kind = .string,
+                                        },
+                                        .required = true,
+                                    },
+                                    .{
+                                        .name = "repos",
+                                        .summary = "Git roots found in the workspace, sorted by name",
+                                        .type = .{
+                                            .kind = .array,
+                                            .items = .{
+                                                .kind = .object,
+                                                .fields = .{
+                                                    .{
+                                                        .name = "name",
+                                                        .summary = "Path relative to the workspace (\".\" when the workspace is a repo)",
+                                                        .type = .{
+                                                            .kind = .string,
+                                                        },
+                                                        .required = true,
+                                                    },
+                                                    .{
+                                                        .name = "path",
+                                                        .summary = "Absolute repo path",
+                                                        .type = .{
+                                                            .kind = .string,
+                                                        },
+                                                        .required = true,
+                                                    },
+                                                },
+                                            },
+                                        },
+                                        .required = true,
+                                    },
+                                    .{
+                                        .name = "changed",
+                                        .summary = "True when the repos differ from the last scan",
+                                        .type = .{
+                                            .kind = .boolean,
+                                        },
+                                        .required = true,
+                                    },
+                                    .{
+                                        .name = "missing",
+                                        .summary = "True when the folder could not be opened; the last repos are kept",
+                                        .type = .{
+                                            .kind = .boolean,
+                                        },
+                                        .required = true,
+                                    },
+                                },
+                            },
+                        },
+                        .required = true,
+                    },
+                },
+            },
+            .errors = .{
+                .{
+                    .code = "not_found.workspace",
+                    .summary = "The path is not a workspace",
+                },
+                .{
+                    .code = "not_found.workspace_path",
+                    .summary = "The workspace folder does not exist or cannot be read",
+                },
+            },
+            .grant = .write,
+            .examples = .{
+                .{
+                    .params = .{ .path = "/home/me/scratch" },
+                    .result = .{ .workspaces = .{.{ .path = "/home/me/scratch", .repos = .{}, .changed = false, .missing = false }} },
+                },
+            },
+        },
+
+        .{
+            .name = "agent.spawn",
+            .summary = "Start an agent: run a harness on a task, scoped to a workspace, a set of its repos, or one repo",
+            .params = .{
+                .{ .name = "task", .summary = "The first prompt", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "workspace", .summary = "Absolute, normalized folder: a workspace, or a folder in one (a repo, or one holding repos). The agent belongs to the closest workspace and starts at its root. A sub-agent naming neither this nor cwd gets its parent's scope", .type = .{ .kind = .string } },
+                .{ .name = "repos", .summary = "Repos in scope, relative to --workspace (or --cwd); writes to the rest of the workspace ask first (best effort, not containment). The whole workspace when omitted", .type = .{ .kind = .array, .comma_list = true, .items = .{ .kind = .string } } },
+                .{ .name = "cwd", .summary = "Absolute, normalized folder the agent runs in (in place); the workspace root when omitted. Alone, the scope is the whole workspace holding it", .type = .{ .kind = .string } },
+                .{ .name = "harness", .summary = "Harness id; agents.default in effect for the folder when omitted (a sub-agent: its parent's)", .type = .{ .kind = .string } },
+                .{ .name = "mode", .summary = "Permission mode; agents.mode in effect for the folder when omitted (a sub-agent: its parent's, which it may only narrow: accept_edits, then ask, then plan; on a harness without that mode, plan)", .type = .{ .kind = .string, .choices = .{ "ask", "accept_edits", "plan" } } },
+                .{ .name = "model", .summary = "Model; the harness's default when omitted (a sub-agent: its parent's, and no other)", .type = .{ .kind = .string } },
+                .{ .name = "title", .summary = "Short title; the first line of the task when omitted", .type = .{ .kind = .string } },
+                .{ .name = "isolation", .summary = "worktree: a git worktree per repo in scope, a sibling of the repo; in_place: the repos themselves; copy: a plain copy per repo. agents.isolation in effect for the folder when omitted (a sub-agent: worktree); in place when the scope has no repos", .type = .{ .kind = .string, .choices = .{ "worktree", "in_place", "copy" } } },
+                .{ .name = "issue", .summary = "Linked issue: 246, #246 or owner/repo#246. Checkouts are named <repo>-246 instead of <repo>-<agent-id>; the issue itself is not changed", .type = .{ .kind = .string } },
+                .{ .name = "branch", .summary = "Worktree branch (e.g. 246-hello-caps); venom/<agent-id> when omitted. An existing branch is checked out unless another worktree has it", .type = .{ .kind = .string } },
+                .{ .name = "dry_run", .summary = "Return what spawn would create (the \"Will create\" preview) without creating or starting anything", .type = .{ .kind = .boolean } },
+                .{
+                    .name = "grants",
+                    .summary = "The agent's grants, within the caller's; read * and write on the agent itself when omitted (a sub-agent: its parent's grants, with write on the parent narrowed to itself). spawn on the agent is always added",
+                    .type = .{ .kind = .array, .items = .{ .kind = .object, .fields = .{
+                        .{ .name = "right", .summary = "Capability", .type = .{ .kind = .string, .choices = .{ "read", "write", "respond", "files", "spawn", "admin" } }, .required = true },
+                        .{ .name = "scope", .summary = "Resource selector: *, workspace:<path>, agent:<id>, ...", .type = .{ .kind = .string }, .required = true },
+                    } } },
+                },
+            },
+            .result = .{ .kind = .object, .fields = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "state", .summary = "The agent's state", .type = .{ .kind = .string, .choices = .{ "queued", "running", "needs_you", "failed", "settled", "handed_over", "archived" } }, .required = true },
+                .{ .name = "harness", .summary = "Harness id", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "title", .summary = "Short title", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "workspace", .summary = "The workspace the agent belongs to (its folder when it has none)", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "repos", .summary = "Repos in scope, relative to the workspace; empty for the whole workspace", .type = .{ .kind = .array, .items = .{ .kind = .string } }, .required = true },
+                .{ .name = "cwd", .summary = "Folder the agent runs in", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "worktrees", .summary = "Worktrees (or copies) created for the agent, relative to the workspace when inside it; empty in place", .type = .{ .kind = .array, .items = .{ .kind = .string } }, .required = true },
+                .{ .name = "isolation", .summary = "The isolation used", .type = .{ .kind = .string, .choices = .{ "worktree", "in_place", "copy" } }, .required = true },
+                .{
+                    .name = "checkouts",
+                    .summary = "One per worktree or copy, in the order of worktrees",
+                    .type = .{ .kind = .array, .items = .{ .kind = .object, .fields = .{
+                        .{ .name = "repo", .summary = "The repo, relative to the workspace", .type = .{ .kind = .string }, .required = true },
+                        .{ .name = "path", .summary = "Absolute path of the worktree or copy", .type = .{ .kind = .string }, .required = true },
+                        .{ .name = "branch", .summary = "The worktree's branch; null for a copy", .type = .{ .kind = .string } },
+                        .{ .name = "new_branch", .summary = "The branch is created from the repo's HEAD (false: an existing branch is checked out)", .type = .{ .kind = .boolean }, .required = true },
+                    } } },
+                    .required = true,
+                },
+                .{ .name = "permission_mode", .summary = "The permission mode the agent runs in (mode, or the default in effect)", .type = .{ .kind = .string, .choices = .{ "ask", "accept_edits", "plan" } } },
+                .{ .name = "model", .summary = "The model asked for (model, or a parent's); absent when the harness picks its default", .type = .{ .kind = .string } },
+                .{ .name = "parent", .summary = "The parent agent, for a sub-agent", .type = .{ .kind = .string } },
+                .{ .name = "dry_run", .summary = "True for a dry run: nothing was created or started", .type = .{ .kind = .boolean } },
+            } },
+            .errors = .{
+                .{ .code = "invalid_params.cwd", .summary = "The folder is not absolute and normalized, not a directory, or outside the agent's workspace" },
+                .{ .code = "not_found.cwd", .summary = "The folder does not exist" },
+                .{ .code = "invalid_params.workspace", .summary = "Neither workspace nor cwd given, the folder is not absolute and normalized, or it is inside a workspace but holds none of its repos" },
+                .{ .code = "not_found.workspace", .summary = "No workspace holds the named repos, or the folder does not exist" },
+                .{ .code = "invalid_params.repos", .summary = "A repo is not relative and normalized" },
+                .{ .code = "not_found.repo", .summary = "The workspace has no such repo (see workspace scan)" },
+                .{ .code = "invalid_params.task", .summary = "The task is empty" },
+                .{ .code = "invalid_params.config_value", .summary = "A config file in the folder's scope is invalid" },
+                .{ .code = "unavailable.harness_not_found", .summary = "The harness has no adapter in this build, is disabled, or its binary is missing" },
+                .{ .code = "unavailable.harness_not_signed_in", .summary = "The harness reports no usable sign-in; nothing was started, and data.fix is its own sign-in command" },
+                .{ .code = "unsupported.harness_version", .summary = "The harness is older than its adapter supports" },
+                .{ .code = "unsupported.harness_capability", .summary = "The send mode needs a capability the harness lacks" },
+                .{ .code = "unavailable.shutting_down", .summary = "The daemon is shutting down" },
+                .{ .code = "denied.spawn", .summary = "The caller lacks spawn on the workspace" },
+                .{ .code = "denied.delegation", .summary = "The requested grants exceed the caller's" },
+                .{ .code = "denied.spawn_disabled", .summary = "agents.spawn.allow is off: agents may not spawn agents here" },
+                .{ .code = "denied.spawn_depth", .summary = "The sub-agent would be deeper than agents.spawn.depth (the top-level agent is depth 1)" },
+                .{ .code = "denied.spawn_mode", .summary = "The mode is wider than the parent's" },
+                .{ .code = "denied.spawn_model", .summary = "The model is not the parent's" },
+                .{ .code = "denied.spawn_isolation", .summary = "A sub-agent of an isolated parent cannot run in place" },
+                .{ .code = "denied.spawn_scope", .summary = "The scope is outside the parent's" },
+                .{ .code = "denied.spawn_harness", .summary = "The harness cannot hold a sub-agent to its parent's mode" },
+                .{ .code = "conflict.parent_stopped", .summary = "The parent is stopping or has no turn running" },
+                .{ .code = "unavailable.agent_grants", .summary = "The agent's grants cannot be restored; it does not start" },
+                .{ .code = "invalid_params.grant_scope", .summary = "A grant scope is malformed" },
+                .{ .code = "invalid_params.issue", .summary = "The issue is not 246, #246 or owner/repo#246" },
+                .{ .code = "invalid_params.branch", .summary = "The branch is not a valid git branch name" },
+                .{ .code = "conflict.worktree_exists", .summary = "A worktree or copy folder already exists; nothing was created" },
+                .{ .code = "conflict.branch_exists", .summary = "The agent's default branch venom/<agent-id> already exists in a repo; nothing was created" },
+                .{ .code = "conflict.branch_checked_out", .summary = "The branch is checked out in another worktree; nothing was created" },
+                .{ .code = "unsupported.copy_linked_worktree", .summary = "A repo that is a linked worktree cannot be copied" },
+                .{ .code = "unavailable.git", .summary = "A repo is not a git root with a commit, or git or cp failed; nothing was left behind" },
+            },
+            .grant = .write,
+            .examples = .{
+                .{ .params = .{ .task = "Add a hello verb", .cwd = "/home/me/scratch", .harness = "claude-code" }, .result = .{ .agent = "a1", .state = "queued", .harness = "claude-code", .title = "Add a hello verb", .workspace = "/home/me/scratch", .repos = .{}, .cwd = "/home/me/scratch", .worktrees = .{}, .isolation = "in_place", .checkouts = .{} } },
+                .{ .params = .{ .task = "Add hello capability bits", .workspace = "/home/me/venom-org", .repos = .{ "venom-term", "venom-std" }, .harness = "claude-code", .isolation = "worktree", .issue = "246", .branch = "246-hello-caps" }, .result = .{ .agent = "a2", .state = "queued", .harness = "claude-code", .title = "Add hello capability bits", .workspace = "/home/me/venom-org", .repos = .{ "venom-term", "venom-std" }, .cwd = "/home/me/venom-org", .worktrees = .{ "venom-term-246", "venom-std-246" }, .isolation = "worktree", .checkouts = .{ .{ .repo = "venom-term", .path = "/home/me/venom-org/venom-term-246", .branch = "246-hello-caps", .new_branch = true }, .{ .repo = "venom-std", .path = "/home/me/venom-org/venom-std-246", .branch = "246-hello-caps", .new_branch = true } } } },
+            },
+        },
+
+        .{
+            .name = "agent.list",
+            .summary = "List agents (runs of a harness on a task), newest first",
+            .params = .{
+                .{ .name = "archived", .summary = "Include archived agents", .type = .{ .kind = .boolean }, .default = false },
+            },
+            .result = .{ .kind = .object, .fields = .{
+                .{ .name = "agents", .summary = "Agents, newest first", .type = .{ .kind = .array, .items = .{ .kind = .object, .fields = .{
+                    .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "title", .summary = "Short title", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "harness", .summary = "Harness id (claude-code, codex, ...)", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "state", .summary = "The agent's state", .type = .{ .kind = .string, .choices = .{ "queued", "running", "needs_you", "failed", "settled", "handed_over", "archived" } }, .required = true },
+                    .{ .name = "unread", .summary = "Settled and not opened since", .type = .{ .kind = .boolean }, .required = true },
+                    .{ .name = "workspace", .summary = "The workspace the agent belongs to (its folder when it has none)", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "repos", .summary = "Repos in scope, relative to the workspace; empty for the whole workspace", .type = .{ .kind = .array, .items = .{ .kind = .string } }, .required = true },
+                    .{ .name = "cwd", .summary = "Folder the agent runs in (in place)", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "created_at", .summary = "Creation time, ms since the Unix epoch", .type = .{ .kind = .integer }, .required = true },
+                    .{ .name = "changed_at", .summary = "When it entered its state, ms since the Unix epoch", .type = .{ .kind = .integer }, .required = true },
+                    .{ .name = "parent", .summary = "The parent agent, for a spawned sub-agent", .type = .{ .kind = .string } },
+                    .{ .name = "issue", .summary = "The linked issue's number, from agent spawn --issue", .type = .{ .kind = .string } },
+                    .{ .name = "children_needs_you", .summary = "Agents below this one (all levels) in needs_you", .type = .{ .kind = .integer }, .required = true },
+                    .{ .name = "children_failed", .summary = "Agents below this one (all levels) in failed", .type = .{ .kind = .integer }, .required = true },
+                } } }, .required = true },
+            } },
+            .grant = .read,
+            .examples = .{.{ .params = .{}, .result = .{ .agents = .{} } }},
+        },
+
+        .{
+            .name = "agent.show",
+            .summary = "Show one agent: its state, pending requests and transcript. The answer always fits max_frame: it carries the newest records that fit; since and before page through the rest",
+            .params = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "tools", .summary = "Also return the tool calls in the transcript", .type = .{ .kind = .boolean }, .default = false },
+                .{ .name = "since", .summary = "Only the transcript from this position on, as far as fits (transcript_end of the last answer: what is new)", .type = .{ .kind = .integer, .min = 0 } },
+                .{ .name = "before", .summary = "Only the newest transcript records before this position that fit (transcript_start of the last answer: older records). Past the end means the tail. Not with since", .type = .{ .kind = .integer, .min = 0 } },
+            },
+            .result = .{ .kind = .object, .fields = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "title", .summary = "Short title", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "harness", .summary = "Harness id (claude-code, codex, ...)", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "state", .summary = "The agent's state", .type = .{ .kind = .string, .choices = .{ "queued", "running", "needs_you", "failed", "settled", "handed_over", "archived" } }, .required = true },
+                .{ .name = "unread", .summary = "Settled and not opened since", .type = .{ .kind = .boolean }, .required = true },
+                .{ .name = "workspace", .summary = "The workspace the agent belongs to (its folder when it has none)", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "repos", .summary = "Repos in scope, relative to the workspace; empty for the whole workspace. Writes to the rest of the workspace ask first (best effort, not containment)", .type = .{ .kind = .array, .items = .{ .kind = .string } }, .required = true },
+                .{ .name = "cwd", .summary = "Folder the agent runs in (in place)", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "created_at", .summary = "Creation time, ms since the Unix epoch", .type = .{ .kind = .integer }, .required = true },
+                .{ .name = "changed_at", .summary = "When it entered its state, ms since the Unix epoch", .type = .{ .kind = .integer }, .required = true },
+                .{ .name = "parent", .summary = "The parent agent, for a spawned sub-agent", .type = .{ .kind = .string } },
+                .{ .name = "children_needs_you", .summary = "Agents below this one (all levels) in needs_you", .type = .{ .kind = .integer }, .required = true },
+                .{ .name = "children_failed", .summary = "Agents below this one (all levels) in failed", .type = .{ .kind = .integer }, .required = true },
+                .{ .name = "child_prompts", .summary = "Prompts its sub-agents got from anyone but this agent, oldest first, the newest that fit; absent with since or before", .type = .{ .kind = .array, .items = .{ .kind = .object, .fields = .{
+                    .{ .name = "child", .summary = "The sub-agent", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "text", .summary = "The prompt", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "at", .summary = "When, ms since the Unix epoch", .type = .{ .kind = .integer }, .required = true },
+                } } } },
+                .{ .name = "turns", .summary = "Turns so far", .type = .{ .kind = .integer }, .required = true },
+                .{ .name = "open_turn", .summary = "The running turn, if any", .type = .{ .kind = .string } },
+                .{ .name = "model", .summary = "The model the harness last reported; absent until it reports one", .type = .{ .kind = .string } },
+                .{ .name = "permission_mode", .summary = "The permission mode, from agents.mode", .type = .{ .kind = .string, .choices = .{ "ask", "accept_edits", "plan" } }, .required = true },
+                .{ .name = "context", .summary = "Latest context size the harness reported; absent until reported", .type = .{ .kind = .object, .fields = .{
+                    .{ .name = "used", .summary = "Tokens in the context", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                    .{ .name = "window", .summary = "Context window, tokens", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                    .{ .name = "source", .summary = "exact or estimate", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "at", .summary = "When reported, ms since the Unix epoch", .type = .{ .kind = .integer }, .required = true },
+                    .{ .name = "system", .summary = "System prompt and instructions, tokens, when the harness says", .type = .{ .kind = .integer, .min = 0 } },
+                    .{ .name = "tools", .summary = "Tool definitions, tokens, when the harness says", .type = .{ .kind = .integer, .min = 0 } },
+                } } },
+                .{ .name = "forks", .summary = "This agent's agent.fork calls, oldest first; absent with since or before", .type = .{ .kind = .array, .items = .{ .kind = .object, .fields = .{
+                    .{ .name = "key", .summary = "The fork's key", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "state", .summary = "running, ok or failed", .type = .{ .kind = .string, .choices = .{ "running", "ok", "failed" } }, .required = true },
+                    .{ .name = "fork", .summary = "The new agent (ok)", .type = .{ .kind = .string } },
+                    .{ .name = "code", .summary = "Error code (failed)", .type = .{ .kind = .string } },
+                } } } },
+                .{ .name = "context_warn_at", .summary = "ui.context.warn_at: percent of the window above which the context meter warns", .type = .{ .kind = .integer, .min = 0, .max = 100 }, .required = true },
+                .{ .name = "steer", .summary = "What a send during a turn can do; absent until the harness has been probed", .type = .{ .kind = .string, .choices = .{ "none", "queue", "inject" } } },
+                .{ .name = "interrupt", .summary = "The harness can interrupt a turn; absent until the harness has been probed", .type = .{ .kind = .boolean } },
+                .{ .name = "requests", .summary = "Pending requests (inbox items), oldest first, as many as fit; inbox.list has them whole", .type = .{ .kind = .array, .items = .{ .kind = .object, .fields = .{
+                    .{ .name = "request", .summary = "Request ID", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "kind", .summary = "approval, question or plan", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "reason", .summary = "What the harness asks", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "stale", .summary = "The harness process that asked is gone; answering resumes the agent", .type = .{ .kind = .boolean }, .required = true },
+                    .{ .name = "outside_scope", .summary = "A write outside the agent's scope, by an edit or a command: always asked, never answered by an allow-always grant", .type = .{ .kind = .boolean }, .required = true },
+                    .{ .name = "call", .summary = "The tool call it belongs to, if any", .type = .{ .kind = .string } },
+                    .{ .name = "options", .summary = "What a question offers, per question: id (q1, q2, … by position, the key of the answer's args), the question's text and its option labels in order; 1-9 pick one", .type = .{ .kind = .array, .items = .{ .kind = .object, .fields = .{
+                        .{ .name = "id", .summary = "q1, q2, … by position", .type = .{ .kind = .string }, .required = true },
+                        .{ .name = "question", .summary = "The question's text", .type = .{ .kind = .string }, .required = true },
+                        .{ .name = "labels", .summary = "Option labels, in the order the harness lists them", .type = .{ .kind = .array, .items = .{ .kind = .string } }, .required = true },
+                        .{ .name = "free_text", .summary = "The harness takes a typed answer besides the labels: an answer to this question may be any one string", .type = .{ .kind = .boolean }, .required = true },
+                        .{ .name = "labels_omitted", .summary = "Some of the harness's labels are not listed (too many, not plain, over the size bound): the answer is not checked against labels", .type = .{ .kind = .boolean }, .required = true },
+                    } } }, .required = true },
+                } } }, .required = true },
+                .{ .name = "requests_omitted", .summary = "How many of the pending requests are listed without their whole reason or their options, to fit the frame; inbox.list has them whole", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                .{ .name = "tails", .summary = "With tools and since or before: the live output of the agent's open calls, wherever they are in the transcript", .type = .{ .kind = .array, .items = .{ .kind = .object, .fields = .{
+                    .{ .name = "call", .summary = "Tool call ID", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "tail", .summary = "The end of its live output", .type = .{ .kind = .string }, .required = true },
+                } } } },
+                .{ .name = "transcript_start", .summary = "The position of the first record covered: older records exist when it is above 0", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                .{ .name = "transcript_end", .summary = "The position after the last record covered: pass it as since to read what is new", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                .{ .name = "transcript_total", .summary = "The transcript's whole length: more follows transcript_end when it is above it", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                .{ .name = "transcript", .summary = "Turn, prompt, text and turn-end records covered, oldest first; with tools also tool.started and tool.ended. A text too big for one response is cut short and ends in …", .type = .{ .kind = .array, .items = .{ .kind = .object, .fields = .{
+                    .{ .name = "type", .summary = "turn.started, turn.prompt, text, turn.ended, tool.started or tool.ended", .type = .{ .kind = .string, .choices = .{ "turn.started", "turn.prompt", "text", "turn.ended", "tool.started", "tool.ended" } }, .required = true },
+                    .{ .name = "turn", .summary = "Turn ID", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "text", .summary = "Message text (text), or the prompt, a long one cut short here and ending in … (turn.prompt)", .type = .{ .kind = .string } },
+                    .{ .name = "reason", .summary = "completed, interrupted, failed or limit (turn.ended)", .type = .{ .kind = .string } },
+                    .{ .name = "error_code", .summary = "Error code (turn.ended)", .type = .{ .kind = .string } },
+                    .{ .name = "fix", .summary = "The harness's own sign-in command, with unavailable.harness_not_signed_in (turn.ended)", .type = .{ .kind = .string } },
+                    .{ .name = "call", .summary = "Tool call ID (tool.*)", .type = .{ .kind = .string } },
+                    .{ .name = "parent_call", .summary = "The sub-agent's starting call (tool.started)", .type = .{ .kind = .string } },
+                    .{ .name = "kind", .summary = "Normalized kind: exec, edit, read, search, list, fetch, mcp, agent, question, plan, other (tool.started)", .type = .{ .kind = .string } },
+                    .{ .name = "name", .summary = "The harness's tool name (tool.started)", .type = .{ .kind = .string } },
+                    .{ .name = "title", .summary = "One line for the row (tool.started)", .type = .{ .kind = .string } },
+                    .{ .name = "status", .summary = "pending, awaiting_approval, running, ok, error, declined or interrupted (tool.*)", .type = .{ .kind = .string } },
+                    .{ .name = "at", .summary = "When it started, ms since the Unix epoch (tool.started)", .type = .{ .kind = .integer } },
+                    .{ .name = "args", .summary = "Normalized arguments, by kind (tool.started)", .type = .{ .kind = .object, .fields = .{ .{ .name = "command", .summary = "exec: command", .type = .{ .kind = .string } }, .{ .name = "cwd", .summary = "exec: folder", .type = .{ .kind = .string } }, .{ .name = "path", .summary = "edit, read, list, search: path", .type = .{ .kind = .string } }, .{ .name = "change", .summary = "edit: modify, create or delete", .type = .{ .kind = .string } }, .{ .name = "added", .summary = "edit: lines added", .type = .{ .kind = .integer } }, .{ .name = "removed", .summary = "edit: lines removed", .type = .{ .kind = .integer } }, .{ .name = "query", .summary = "search, fetch: query", .type = .{ .kind = .string } }, .{ .name = "url", .summary = "fetch: URL", .type = .{ .kind = .string } }, .{ .name = "server", .summary = "mcp: server", .type = .{ .kind = .string } }, .{ .name = "tool", .summary = "mcp: tool", .type = .{ .kind = .string } }, .{ .name = "child_ref", .summary = "agent: the harness's id for the sub-agent", .type = .{ .kind = .string } } } } },
+                    .{ .name = "tail", .summary = "The end of an open call's live output (tool.started); with since or before it is in tails instead", .type = .{ .kind = .string } },
+                    .{ .name = "exit", .summary = "Exit code, when the harness reported one (tool.ended)", .type = .{ .kind = .integer } },
+                    .{ .name = "duration_ms", .summary = "Duration (tool.ended)", .type = .{ .kind = .integer } },
+                    .{ .name = "body", .summary = "Output or diff, cut short here: {text, truncated, bytes}; agent.tool has the whole body (tool.ended)", .type = .{ .kind = .object, .fields = .{ .{ .name = "text", .summary = "The text kept", .type = .{ .kind = .string }, .required = true }, .{ .name = "truncated", .summary = "text is cut", .type = .{ .kind = .boolean }, .required = true }, .{ .name = "bytes", .summary = "The whole size", .type = .{ .kind = .integer }, .required = true } } } },
+                } } }, .required = true },
+            } },
+            .errors = .{
+                .{ .code = "not_found.agent", .summary = "No agent with this ID" },
+                .{ .code = "invalid_params.since", .summary = "Both since and before were given" },
+            },
+            .grant = .read,
+            .examples = .{.{ .params = .{ .agent = "a1" }, .result = .{ .agent = "a1", .forks = .{}, .title = "Add a hello verb", .harness = "claude-code", .state = "settled", .unread = true, .workspace = "/home/me/scratch", .repos = .{}, .cwd = "/home/me/scratch", .created_at = 1794000000000, .changed_at = 1794000060000, .children_needs_you = 0, .children_failed = 0, .child_prompts = .{}, .turns = 1, .permission_mode = "ask", .context_warn_at = 80, .requests = .{}, .requests_omitted = 0, .transcript_start = 0, .transcript_end = 3, .transcript_total = 3, .transcript = .{ .{ .type = "turn.started", .turn = "t1" }, .{ .type = "text", .turn = "t1", .text = "Done." }, .{ .type = "turn.ended", .turn = "t1", .reason = "completed" } } } }},
+        },
+        .{
+            .name = "agent.tool",
+            .summary = "Show one tool call of an agent whole: arguments, status and its full body",
+            .params = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "call", .summary = "Tool call ID", .type = .{ .kind = .string }, .required = true },
+            },
+            .result = .{ .kind = .object, .fields = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "call", .summary = "Tool call ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "turn", .summary = "Turn ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "parent_call", .summary = "The sub-agent's starting call", .type = .{ .kind = .string } },
+                .{ .name = "harness_ref", .summary = "The harness's id for the call", .type = .{ .kind = .string } },
+                .{ .name = "kind", .summary = "Normalized kind", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "name", .summary = "The harness's tool name", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "title", .summary = "One line for the row", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "args", .summary = "Normalized arguments, by kind", .type = .{ .kind = .object, .fields = .{ .{ .name = "command", .summary = "exec: command", .type = .{ .kind = .string } }, .{ .name = "cwd", .summary = "exec: folder", .type = .{ .kind = .string } }, .{ .name = "path", .summary = "edit, read, list, search: path", .type = .{ .kind = .string } }, .{ .name = "change", .summary = "edit: modify, create or delete", .type = .{ .kind = .string } }, .{ .name = "added", .summary = "edit: lines added", .type = .{ .kind = .integer } }, .{ .name = "removed", .summary = "edit: lines removed", .type = .{ .kind = .integer } }, .{ .name = "query", .summary = "search, fetch: query", .type = .{ .kind = .string } }, .{ .name = "url", .summary = "fetch: URL", .type = .{ .kind = .string } }, .{ .name = "server", .summary = "mcp: server", .type = .{ .kind = .string } }, .{ .name = "tool", .summary = "mcp: tool", .type = .{ .kind = .string } }, .{ .name = "child_ref", .summary = "agent: the harness's id for the sub-agent", .type = .{ .kind = .string } } } } },
+                .{ .name = "raw_input", .summary = "The harness's own input for the call: {text, truncated, bytes}, text being JSON cut at harness.body_max; absent when not recorded", .type = .{ .kind = .object, .fields = .{ .{ .name = "text", .summary = "The text kept", .type = .{ .kind = .string }, .required = true }, .{ .name = "truncated", .summary = "text is cut", .type = .{ .kind = .boolean }, .required = true }, .{ .name = "bytes", .summary = "The whole size", .type = .{ .kind = .integer }, .required = true } } } },
+                .{ .name = "at", .summary = "When it started, ms since the Unix epoch", .type = .{ .kind = .integer }, .required = true },
+                .{ .name = "status", .summary = "pending, awaiting_approval, running, ok, error, declined or interrupted", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "exit", .summary = "Exit code, when the harness reported one", .type = .{ .kind = .integer } },
+                .{ .name = "duration_ms", .summary = "Duration", .type = .{ .kind = .integer } },
+                .{ .name = "body", .summary = "Output or diff: {text, truncated, bytes}", .type = .{ .kind = .object, .fields = .{ .{ .name = "text", .summary = "The text kept", .type = .{ .kind = .string }, .required = true }, .{ .name = "truncated", .summary = "text is cut", .type = .{ .kind = .boolean }, .required = true }, .{ .name = "bytes", .summary = "The whole size", .type = .{ .kind = .integer }, .required = true } } } },
+                .{ .name = "tail", .summary = "The end of an open call's live output", .type = .{ .kind = .string } },
+            } },
+            .errors = .{
+                .{ .code = "not_found.agent", .summary = "No agent with this ID" },
+                .{ .code = "not_found.call", .summary = "The agent has no such tool call" },
+            },
+            .grant = .read,
+            .examples = .{.{ .params = .{ .agent = "a1", .call = "c1" }, .result = .{ .agent = "a1", .call = "c1", .turn = "t1", .kind = "exec", .name = "Bash", .title = "zig build test", .at = 1794000000000, .status = "ok", .exit = 0, .duration_ms = 4200 } }},
+        },
+
+        .{
+            .name = "agent.send",
+            .summary = "Send a prompt to an agent; starts a turn (or steers one, by mode)",
+            .params = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "text", .summary = "The prompt", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "mode", .summary = "turn (queued after a running turn if the harness allows), steer, or interrupt_then_send", .type = .{ .kind = .string, .choices = .{ "turn", "steer", "interrupt_then_send" } }, .default = "turn" },
+            },
+            .result = .{ .kind = .object, .fields = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "state", .summary = "The agent's state", .type = .{ .kind = .string, .choices = .{ "queued", "running", "needs_you", "failed", "settled", "handed_over", "archived" } }, .required = true },
+            } },
+            .errors = .{
+                .{ .code = "not_found.agent", .summary = "No agent with this ID" },
+                .{ .code = "conflict.invalid_transition", .summary = "The agent is archived" },
+                .{ .code = "unavailable.agent_grants", .summary = "The agent's grants cannot be restored (its parent is archived or revoked); it does not start" },
+                .{ .code = "conflict.agent_queued", .summary = "The agent waits for a concurrency slot with its task held; stop it to prompt it" },
+                .{ .code = "conflict.handed_over", .summary = "The harness's own TUI has the agent" },
+                .{ .code = "conflict.turn_running", .summary = "A turn runs and the harness cannot queue another" },
+                .{ .code = "invalid_params.text", .summary = "The prompt is empty" },
+                .{ .code = "unavailable.harness_not_found", .summary = "The harness has no adapter in this build, is disabled, or its binary is missing" },
+                .{ .code = "unavailable.harness_not_signed_in", .summary = "The send would start the harness again and it reports no usable sign-in; data.fix is its own sign-in command" },
+                .{ .code = "unsupported.harness_version", .summary = "The harness is older than its adapter supports" },
+                .{ .code = "unsupported.harness_capability", .summary = "The send mode needs a capability the harness lacks" },
+                .{ .code = "unavailable.shutting_down", .summary = "The daemon is shutting down" },
+            },
+            .grant = .write,
+            .examples = .{.{ .params = .{ .agent = "a1", .text = "Now add a test" }, .result = .{ .agent = "a1", .state = "settled" } }},
+        },
+
+        .{
+            .name = "agent.stop",
+            .summary = "Stop an agent's work; a running turn is interrupted and the agent settles. A queued agent's held task is dropped unsent",
+            .params = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "tree", .summary = "Also stop every agent below it; one handed to its harness's own TUI is left as it is and shown in the result", .type = .{ .kind = .boolean }, .default = false },
+            },
+            .result = .{ .kind = .object, .fields = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "state", .summary = "The agent's state", .type = .{ .kind = .string, .choices = .{ "queued", "running", "needs_you", "failed", "settled", "handed_over", "archived" } }, .required = true },
+                .{ .name = "children", .summary = "With tree: the agents below it, after the stop", .type = .{ .kind = .array, .items = .{ .kind = .object, .fields = .{
+                    .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "state", .summary = "The agent's state", .type = .{ .kind = .string, .choices = .{ "queued", "running", "needs_you", "failed", "settled", "handed_over", "archived" } }, .required = true },
+                } } } },
+            } },
+            .errors = .{
+                .{ .code = "not_found.agent", .summary = "No agent with this ID" },
+                .{ .code = "conflict.agent_handed_over", .summary = "The harness's own TUI owns the turn; take it back first" },
+            },
+            .grant = .write,
+            .examples = .{.{ .params = .{ .agent = "a1" }, .result = .{ .agent = "a1", .state = "running" } }},
+        },
+
+        .{
+            .name = "agent.archive",
+            .summary = "Archive an agent (stopping it first); its transcript and worktrees are kept unless --clean",
+            .params = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "clean", .summary = "Also remove its worktrees and branches, as agent clean does; a turn still being interrupted leaves them for a later agent clean", .type = .{ .kind = .boolean }, .default = false },
+            },
+            .result = .{ .kind = .object, .fields = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "state", .summary = "The agent's state", .type = .{ .kind = .string, .choices = .{ "queued", "running", "needs_you", "failed", "settled", "handed_over", "archived" } }, .required = true },
+                .{ .name = "worktrees", .summary = "With --clean: what happened to each worktree or copy", .type = .{ .kind = .array, .items = .{ .kind = .object, .fields = .{
+                    .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "repo", .summary = "The repo, relative to the workspace", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "path", .summary = "Absolute path of the worktree or copy", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "branch", .summary = "The worktree's branch; null for a copy", .type = .{ .kind = .string } },
+                    .{ .name = "outcome", .summary = "removed; kept (see reason); gone: the folder was already not there and nothing else held it", .type = .{ .kind = .string, .choices = .{ "removed", "kept", "gone" } }, .required = true },
+                    .{ .name = "reason", .summary = "Why it was kept", .type = .{ .kind = .string, .choices = .{ "uncommitted", "unpushed", "operation_in_progress", "not_ours", "agent_active", "not_merged", "gh_unavailable", "remote_unavailable", "folder_missing", "timed_out", "git" } } },
+                    .{ .name = "detail", .summary = "What was found, for people", .type = .{ .kind = .string } },
+                    .{ .name = "branch_deleted", .summary = "The local branch was deleted; remote branches are never touched", .type = .{ .kind = .boolean }, .required = true },
+                    .{ .name = "pr", .summary = "The merged PR holding the work, when one was needed or asked for", .type = .{ .kind = .string } },
+                } } } },
+            } },
+            .errors = .{
+                .{ .code = "not_found.agent", .summary = "No agent with this ID" },
+                .{ .code = "conflict.agent_handed_over", .summary = "The harness's own TUI owns the turn; take it back first" },
+            },
+            .grant = .write,
+            .examples = .{.{ .params = .{ .agent = "a1" }, .result = .{ .agent = "a1", .state = "archived" } }},
+        },
+
+        .{
+            .name = "agent.clean",
+            .summary = "Remove archived agents' worktrees and branches; any with uncommitted or unpushed work is kept and reported",
+            .params = .{
+                .{ .name = "agent", .summary = "The archived agent; every archived agent you may write when omitted (needs --merged)", .type = .{ .kind = .string } },
+                .{ .name = "merged", .summary = "Only remove worktrees whose PR is merged, squash merges included (asks gh; without it nothing is removed). A folder that is missing is left to an explicit clean", .type = .{ .kind = .boolean }, .default = false },
+            },
+            .result = .{ .kind = .object, .fields = .{
+                .{ .name = "worktrees", .summary = "What happened to each worktree or copy; a kept one is not an error. Without --agent, already gone ones are left out", .type = .{ .kind = .array, .items = .{ .kind = .object, .fields = .{
+                    .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "repo", .summary = "The repo, relative to the workspace", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "path", .summary = "Absolute path of the worktree or copy", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "branch", .summary = "The worktree's branch; null for a copy", .type = .{ .kind = .string } },
+                    .{ .name = "outcome", .summary = "removed; kept (see reason); gone: the folder was already not there and nothing else held it", .type = .{ .kind = .string, .choices = .{ "removed", "kept", "gone" } }, .required = true },
+                    .{ .name = "reason", .summary = "Why it was kept", .type = .{ .kind = .string, .choices = .{ "uncommitted", "unpushed", "operation_in_progress", "not_ours", "agent_active", "not_merged", "gh_unavailable", "remote_unavailable", "folder_missing", "timed_out", "git" } } },
+                    .{ .name = "detail", .summary = "What was found, for people", .type = .{ .kind = .string } },
+                    .{ .name = "branch_deleted", .summary = "The local branch was deleted; remote branches are never touched", .type = .{ .kind = .boolean }, .required = true },
+                    .{ .name = "pr", .summary = "The merged PR holding the work, when one was needed or asked for", .type = .{ .kind = .string } },
+                } } }, .required = true },
+            } },
+            .errors = .{
+                .{ .code = "not_found.agent", .summary = "No agent with this ID" },
+                .{ .code = "conflict.agent_not_archived", .summary = "Only an archived agent can be cleaned; see agent archive --clean" },
+                .{ .code = "invalid_params.agent", .summary = "Neither --agent nor --merged" },
+            },
+            .grant = .write,
+            .examples = .{.{ .params = .{ .agent = "a2" }, .result = .{ .worktrees = .{ .{ .agent = "a2", .repo = "venom-std", .path = "/home/me/venom-org/venom-std-246", .branch = "246-hello-caps", .outcome = "removed", .branch_deleted = true }, .{ .agent = "a2", .repo = "venom-term", .path = "/home/me/venom-org/venom-term-246", .branch = "246-hello-caps", .outcome = "kept", .reason = "uncommitted", .detail = "2 paths with uncommitted changes", .branch_deleted = false } } } }},
+        },
+
+        .{
+            .name = "agent.wait",
+            .summary = "Wait until every agent below this one has finished (settled, failed or archived); the call stays open until then",
+            .params = .{
+                .{ .name = "agent", .summary = "Agent ID; the calling agent when omitted", .type = .{ .kind = .string } },
+                .{ .name = "timeout_s", .summary = "Give up after this many seconds and report done false; 0 checks once", .type = .{ .kind = .integer, .min = 0 }, .default = 600 },
+            },
+            .result = .{ .kind = .object, .fields = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "done", .summary = "False when the timeout came first", .type = .{ .kind = .boolean }, .required = true },
+                .{ .name = "children", .summary = "The agents below it, parents first", .type = .{ .kind = .array, .items = .{ .kind = .object, .fields = .{
+                    .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "state", .summary = "The agent's state", .type = .{ .kind = .string, .choices = .{ "queued", "running", "needs_you", "failed", "settled", "handed_over", "archived" } }, .required = true },
+                } } }, .required = true },
+            } },
+            .errors = .{
+                .{ .code = "not_found.agent", .summary = "No agent with this ID" },
+                .{ .code = "invalid_params.agent", .summary = "The caller is not an agent: name one" },
+            },
+            .grant = .read,
+            .examples = .{.{ .params = .{ .agent = "a1", .timeout_s = 0 }, .result = .{ .agent = "a1", .done = true, .children = .{.{ .agent = "a2", .state = "settled" }} } }},
+        },
+
+        .{
+            .name = "agent.promote",
+            .summary = "Make a spawned sub-agent top-level: it leaves its parent's tree and outlives its parent's archive. For people, not agents",
+            .params = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+            },
+            .result = .{ .kind = .object, .fields = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "promoted", .summary = "False when it was top-level already", .type = .{ .kind = .boolean }, .required = true },
+            } },
+            .errors = .{
+                .{ .code = "not_found.agent", .summary = "No agent with this ID" },
+                .{ .code = "conflict.invalid_transition", .summary = "The agent is archived" },
+                .{ .code = "conflict.parent_archived", .summary = "Its parent is archived or its grants were revoked, so it has nothing to run with" },
+                .{ .code = "denied.promote", .summary = "An agent cannot promote: it would escape agents.spawn.depth" },
+            },
+            .grant = .write,
+            .examples = .{.{ .params = .{ .agent = "a2" }, .result = .{ .agent = "a2", .promoted = true } }},
+        },
+
+        .{
+            .name = "agent.takeover",
+            .summary = "Hand a settled agent to its harness's own TUI: venom releases the conversation and returns the command that resumes it",
+            .params = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "pane", .summary = "The venomx pane that runs the command (host mode), or `venomx` until agent.takeover_pane names it; omitted when the caller runs it itself", .type = .{ .kind = .string } },
+            },
+            .result = .{ .kind = .object, .fields = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "state", .summary = "The agent's state (handed_over)", .type = .{ .kind = .string, .choices = .{ "queued", "running", "needs_you", "failed", "settled", "handed_over", "archived" } }, .required = true },
+                .{ .name = "harness", .summary = "The harness whose TUI takes over", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "argv", .summary = "The resume command; argv[0] is looked up in PATH", .type = .{ .kind = .array, .items = .{ .kind = .string } }, .required = true },
+                .{ .name = "cwd", .summary = "Where to run it: the agent's folder", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "env", .summary = "Environment variables to set on top of the caller's", .type = .{ .kind = .array, .items = .{ .kind = .object, .fields = .{
+                    .{ .name = "name", .summary = "Variable name", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "value", .summary = "Value", .type = .{ .kind = .string }, .required = true },
+                } } }, .required = true },
+                .{ .name = "split", .summary = "The pane given as --pane", .type = .{ .kind = .string } },
+            } },
+            .errors = .{
+                .{ .code = "denied.agent_caller", .summary = "Only a person can take an agent over" },
+                .{ .code = "not_found.agent", .summary = "No agent with this ID" },
+                .{ .code = "conflict.turn_running", .summary = "A turn runs; take over after it ends, or stop it first" },
+                .{ .code = "conflict.handed_over", .summary = "The harness's own TUI has the agent already" },
+                .{ .code = "conflict.invalid_transition", .summary = "Only a settled agent can be taken over" },
+                .{ .code = "not_found.harness_session", .summary = "The agent has no harness conversation yet" },
+                .{ .code = "unsupported.harness_capability", .summary = "The harness's adapter provides no resume command" },
+                .{ .code = "unavailable.harness_not_found", .summary = "The harness has no adapter in this build, or it is disabled" },
+            },
+            .grant = .write,
+            .examples = .{.{ .params = .{ .agent = "a2" }, .result = .{ .agent = "a2", .state = "handed_over", .harness = "claude-code", .argv = .{ "claude", "--resume", "6f1c2e0a-7d1b-4c55-9a1e-3f0d7b2c8e41" }, .cwd = "/home/u/venom-org/venom-std-246", .env = .{} } }},
+        },
+
+        .{
+            .name = "agent.takeback",
+            .summary = "Take an agent back from its harness's own TUI once that has exited: imports the turns and usage it ran, and settles the agent",
+            .params = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "force", .summary = "Take it back even though another venom TUI's split still runs the harness; may lose lines the other client is still writing", .type = .{ .kind = .boolean }, .default = false },
+            },
+            .result = .{ .kind = .object, .fields = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "state", .summary = "The agent's state", .type = .{ .kind = .string, .choices = .{ "queued", "running", "needs_you", "failed", "settled", "handed_over", "archived" } }, .required = true },
+                .{ .name = "imported", .summary = "Turns imported from the harness's own record", .type = .{ .kind = .integer }, .required = true },
+                .{ .name = "catch_up", .summary = "Why nothing could be imported (failed.harness_catch_up, no_catch_up); empty when the import ran", .type = .{ .kind = .string }, .required = true },
+            } },
+            .errors = .{
+                .{ .code = "conflict.takeover_pane_running", .summary = "The harness still runs in the agent's venomx pane; quit it there, or --force" },
+                .{ .code = "unavailable.takeover_pane", .summary = "venomx cannot say whether the agent's pane still runs; --force once it has ended" },
+                .{ .code = "not_found.agent", .summary = "No agent with this ID" },
+                .{ .code = "conflict.invalid_transition", .summary = "The agent is not handed over" },
+                .{ .code = "conflict.owned_by_client", .summary = "Another running venom TUI owns the take-over split (data.pid); quit the harness there, or pass --force=true" },
+            },
+            .grant = .write,
+            .examples = .{.{ .params = .{ .agent = "a2" }, .result = .{ .agent = "a2", .state = "settled", .imported = 1, .catch_up = "" } }},
+        },
+
+        .{
+            .name = "agent.takeover_pane",
+            .summary = "Say which venomx pane runs a take-over asked for with --pane=venomx; its liveness then decides whether the agent may be taken back (a venom TUI calls this after pane.split)",
+            .params = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "pane", .summary = "The venomx pane ID", .type = .{ .kind = .string }, .required = true },
+            },
+            .result = .{ .kind = .object, .fields = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "pane", .summary = "The pane recorded", .type = .{ .kind = .string }, .required = true },
+            } },
+            .errors = .{
+                .{ .code = "not_found.agent", .summary = "No agent with this ID" },
+                .{ .code = "conflict.not_handed_over", .summary = "The agent is not handed over" },
+                .{ .code = "conflict.takeover_pane_set", .summary = "This take-over's pane is already known" },
+                .{ .code = "denied.agent_caller", .summary = "The caller acts for an agent; only the human's venom TUI reports a pane" },
+                .{ .code = "invalid_params.pane", .summary = "Not a venomx pane ID" },
+            },
+            .grant = .write,
+            .examples = .{.{ .params = .{ .agent = "a2", .pane = "p4" }, .result = .{ .agent = "a2", .pane = "p4" } }},
+        },
+
+        .{
+            .name = "agent.takeover_split",
+            .summary = "Say which process runs a handed-over agent's take-over split, so hooks from inside it are accepted (a venom TUI calls this after starting the command, for its own child or its venomx pane's process, which venomx must confirm)",
+            .params = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "pid", .summary = "The process running the resume command", .type = .{ .kind = .integer, .min = 1 }, .required = true },
+            },
+            .result = .{ .kind = .object, .fields = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "pid", .summary = "The process recorded", .type = .{ .kind = .integer }, .required = true },
+            } },
+            .errors = .{
+                .{ .code = "not_found.agent", .summary = "No agent with this ID" },
+                .{ .code = "conflict.not_handed_over", .summary = "The agent is not handed over" },
+                .{ .code = "conflict.not_client_split", .summary = "The take-over has no split whose process can be checked: none, or its venomx pane is not named yet" },
+                .{ .code = "conflict.owned_by_client", .summary = "Another venom TUI owns the take-over split (data.pid)" },
+                .{ .code = "denied.agent_caller", .summary = "The caller acts for an agent; only the human's venom TUI reports a split" },
+                .{ .code = "invalid_params.pid", .summary = "No such process, or not the take-over split's: the calling TUI's child, or the process venomx runs in its pane" },
+                .{ .code = "conflict.takeover_pane_gone", .summary = "The agent's venomx pane has ended; nothing is recorded" },
+                .{ .code = "unavailable.takeover_pane", .summary = "venomx cannot say which process runs the agent's pane; nothing is recorded, so its hooks are refused" },
+            },
+            .grant = .write,
+            .examples = .{.{ .params = .{ .agent = "a2", .pid = 4242 }, .result = .{ .agent = "a2", .pid = 4242 } }},
+        },
+
+        .{
+            .name = "harness.hook",
+            .summary = "Report a harness hook while handed over: raises attention for the agent (`venom agent hook` calls this; not for people)",
+            .params = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "input", .summary = "The hook's JSON, as the harness gave it", .type = .{ .kind = .string }, .required = true },
+            },
+            .result = .{ .kind = .object, .fields = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "kind", .summary = "The attention raised (approval, question, review); empty when the hook raises none", .type = .{ .kind = .string }, .required = true },
+            } },
+            .errors = .{
+                .{ .code = "denied.agent_caller", .summary = "An agent cannot report hooks" },
+                .{ .code = "not_found.agent", .summary = "No agent with this ID" },
+                .{ .code = "conflict.not_handed_over", .summary = "The agent is not handed over" },
+                .{ .code = "denied.outside_pane", .summary = "The caller does not run inside the agent's take-over split" },
+                .{ .code = "unsupported.harness_capability", .summary = "The agent's harness reports no hooks" },
+                .{ .code = "invalid_params.input", .summary = "input is not the hook's JSON" },
+            },
+            .grant = .read,
+        },
+
+        .{
+            .name = "harness.permission_prompt",
+            .summary = "Raise a Claude Code permission prompt as the calling agent and wait for its answer (venom's permission prompt server calls this; not for people)",
+            .params = .{
+                .{ .name = "tool_name", .summary = "The tool Claude Code asks about (Bash, Edit, AskUserQuestion, ExitPlanMode, ...)", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "input", .summary = "The tool's input, as a JSON object", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "tool_use_id", .summary = "Claude Code's tool_use id for the call", .type = .{ .kind = .string }, .required = true },
+            },
+            .result = .{ .kind = .object, .fields = .{
+                .{ .name = "result", .summary = "Claude Code's permission result JSON (behavior allow or deny)", .type = .{ .kind = .string }, .required = true },
+            } },
+            .errors = .{
+                .{ .code = "denied.not_agent", .summary = "The caller is not an agent's harness process" },
+                .{ .code = "not_found.agent", .summary = "The calling agent has no harness binding" },
+                .{ .code = "unsupported.harness_capability", .summary = "The agent's harness is not claude-code" },
+                .{ .code = "failed.harness_exited", .summary = "The agent's harness process is gone" },
+                .{ .code = "failed.harness_protocol", .summary = "The tool_use_id already has a pending prompt" },
+                .{ .code = "invalid_params.input", .summary = "input is not a JSON object" },
+            },
+            .grant = .write,
+        },
+
+        .{
+            .name = "harness.list",
+            .summary = "List the harnesses venom has an adapter for: found on PATH, version, signed in, protocol reachable",
+            .result = .{ .kind = .object, .fields = .{
+                .{ .name = "harnesses", .summary = "Harnesses, in adapter order", .type = .{ .kind = .array, .items = .{ .kind = .object, .fields = .{
+                    .{ .name = "harness", .summary = "Harness id", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "enabled", .summary = "harness.<h>.enabled; a harness that is off is looked up on PATH and not run", .type = .{ .kind = .boolean }, .required = true },
+                    .{ .name = "found", .summary = "Its executable is on PATH", .type = .{ .kind = .boolean }, .required = true },
+                    .{ .name = "path", .summary = "Where it was found; absent when not found", .type = .{ .kind = .string } },
+                    .{ .name = "version", .summary = "What it reports with --version; absent when not known", .type = .{ .kind = .string } },
+                    .{ .name = "signed_in", .summary = "What the harness's own status command reports; absent when not known", .type = .{ .kind = .boolean } },
+                    .{ .name = "sign_in_detail", .summary = "Plan or sign-in method, never an identity; absent when not known", .type = .{ .kind = .string } },
+                    .{ .name = "protocol", .summary = "Its protocol answered a read-only handshake; absent when not checked", .type = .{ .kind = .boolean } },
+                    .{ .name = "fix", .summary = "What to run next: its install command, or its own sign-in command", .type = .{ .kind = .string } },
+                } } }, .required = true },
+            } },
+            .grant = .read,
+            .examples = .{.{ .params = .{}, .result = .{ .harnesses = .{ .{ .harness = "claude-code", .enabled = true, .found = true, .path = "/home/me/.local/bin/claude", .version = "2.1.319", .signed_in = true, .sign_in_detail = "pro", .protocol = true }, .{ .harness = "codex", .enabled = true, .found = true, .path = "/home/me/.local/bin/codex", .version = "0.167.0", .signed_in = false, .protocol = true, .fix = "codex login" } } } }},
+        },
+
+        .{
+            .name = "harness.show",
+            .summary = "Show one harness: found on PATH, version, signed in, protocol reachable, and the versions its adapter supports",
+            .params = .{
+                .{ .name = "harness", .summary = "Harness id (claude-code, codex)", .type = .{ .kind = .string }, .required = true },
+            },
+            .result = .{ .kind = .object, .fields = .{
+                .{ .name = "harness", .summary = "Harness id", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "enabled", .summary = "harness.<h>.enabled; a harness that is off is looked up on PATH and not run", .type = .{ .kind = .boolean }, .required = true },
+                .{ .name = "found", .summary = "Its executable is on PATH", .type = .{ .kind = .boolean }, .required = true },
+                .{ .name = "path", .summary = "Where it was found; absent when not found", .type = .{ .kind = .string } },
+                .{ .name = "version", .summary = "What it reports with --version; absent when not known", .type = .{ .kind = .string } },
+                .{ .name = "signed_in", .summary = "What the harness's own status command reports; absent when not known", .type = .{ .kind = .boolean } },
+                .{ .name = "sign_in_detail", .summary = "Plan or sign-in method, never an identity; absent when not known", .type = .{ .kind = .string } },
+                .{ .name = "protocol", .summary = "Its protocol answered a read-only handshake; absent when not checked", .type = .{ .kind = .boolean } },
+                .{ .name = "protocol_problem", .summary = "Why the protocol did not answer; absent when it did or was not checked", .type = .{ .kind = .string } },
+                .{ .name = "fix", .summary = "What to run next: its install command, or its own sign-in command", .type = .{ .kind = .string } },
+                .{ .name = "min_version", .summary = "The oldest version the adapter supports; absent when it has no minimum", .type = .{ .kind = .string } },
+                .{ .name = "tested_version", .summary = "The version the adapter was tested with", .type = .{ .kind = .string }, .required = true },
+            } },
+            .errors = .{
+                .{ .code = "not_found.harness", .summary = "venom has no adapter with this id" },
+            },
+            .grant = .read,
+            .examples = .{.{ .params = .{ .harness = "codex" }, .result = .{ .harness = "codex", .enabled = true, .found = true, .path = "/home/me/.local/bin/codex", .version = "0.167.0", .signed_in = true, .sign_in_detail = "ChatGPT", .protocol = true, .tested_version = "0.167.0" } }},
+        },
+
+        .{
+            .name = "agent.context",
+            .summary = "Show what fills an agent's context window, the largest items, and which actions its harness offers",
+            .params = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+            },
+            .result = .{ .kind = .object, .fields = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "title", .summary = "Agent title", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "harness", .summary = "Harness id", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "used", .summary = "Tokens in the context, as last reported; absent until reported", .type = .{ .kind = .integer, .min = 0 } },
+                .{ .name = "window", .summary = "Context window, tokens; absent until reported", .type = .{ .kind = .integer, .min = 0 } },
+                .{ .name = "source", .summary = "exact or estimate; absent until reported", .type = .{ .kind = .string } },
+                .{ .name = "warn_at", .summary = "ui.context.warn_at: percent above which the meter warns", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                .{ .name = "fills", .summary = "What fills the window: empty until a size is reported", .type = .{ .kind = .array, .items = .{ .kind = .object, .fields = .{
+                    .{ .name = "kind", .summary = "system, tools, messages, files, or fixed (system and tools, when the harness does not tell them apart)", .type = .{ .kind = .string, .choices = .{ "system", "tools", "messages", "files", "fixed" } }, .required = true },
+                    .{ .name = "tokens", .summary = "Tokens; the transcript's parts are estimated from its bytes", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                } } }, .required = true },
+                .{ .name = "largest", .summary = "The largest tool results still in the transcript, largest first", .type = .{ .kind = .array, .items = .{ .kind = .object, .fields = .{
+                    .{ .name = "call", .summary = "Tool call ID", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "kind", .summary = "Normalized kind", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "name", .summary = "The harness's tool name", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "title", .summary = "One line for the row", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "tokens", .summary = "Estimated tokens", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                } } }, .required = true },
+                .{ .name = "mcp", .summary = "MCP servers: venom's own are not listed", .type = .{ .kind = .object, .fields = .{
+                    .{ .name = "servers", .summary = "The servers its harness last reported", .type = .{ .kind = .array, .items = .{ .kind = .string } }, .required = true },
+                    .{ .name = "unused", .summary = "Those it has not called, and not off yet", .type = .{ .kind = .array, .items = .{ .kind = .string } }, .required = true },
+                    .{ .name = "off", .summary = "Turned off for its next processes", .type = .{ .kind = .array, .items = .{ .kind = .string } }, .required = true },
+                } }, .required = true },
+                .{ .name = "actions", .summary = "What its harness's adapter supports", .type = .{ .kind = .object, .fields = .{
+                    .{ .name = "compact", .summary = "agent.compact", .type = .{ .kind = .boolean }, .required = true },
+                    .{ .name = "fork", .summary = "agent.fork", .type = .{ .kind = .boolean }, .required = true },
+                    .{ .name = "mcp_off", .summary = "agent.mcp_off, and there is an unused server to turn off", .type = .{ .kind = .boolean }, .required = true },
+                } }, .required = true },
+            } },
+            .errors = .{
+                .{ .code = "not_found.agent", .summary = "No agent with this ID" },
+            },
+            .grant = .read,
+            .examples = .{.{ .params = .{ .agent = "a1" }, .result = .{ .agent = "a1", .title = "Add a hello verb", .harness = "claude-code", .used = 124000, .window = 200000, .source = "estimate", .warn_at = 80, .fills = .{ .{ .kind = "fixed", .tokens = 30000 }, .{ .kind = "messages", .tokens = 61000 }, .{ .kind = "files", .tokens = 33000 } }, .largest = .{.{ .call = "c4", .kind = "read", .name = "Read", .title = "spec/vectors/all.json", .tokens = 14000 }}, .mcp = .{ .servers = .{"linear"}, .unused = .{"linear"}, .off = .{} }, .actions = .{ .compact = true, .fork = true, .mcp_off = true } } }},
+        },
+        .{
+            .name = "agent.compact",
+            .summary = "Ask the harness to compact an agent's conversation, between turns; it runs as a turn",
+            .params = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+            },
+            .result = .{ .kind = .object, .fields = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+            } },
+            .errors = .{
+                .{ .code = "not_found.agent", .summary = "No agent with this ID" },
+                .{ .code = "unsupported.harness_capability", .summary = "Its harness cannot compact" },
+                .{ .code = "conflict.turn_running", .summary = "A turn is running" },
+                .{ .code = "conflict.handed_over", .summary = "The harness's own TUI has the agent" },
+                .{ .code = "not_found.harness_session", .summary = "It has no conversation yet" },
+            },
+            .grant = .write,
+            .examples = .{.{ .params = .{ .agent = "a1" }, .result = .{ .agent = "a1" } }},
+        },
+        .{
+            .name = "agent.fork",
+            .summary = "Fork an agent's conversation into a new sub-agent in the same folder. Returns at once: agent.fork_ended on events, and forks on agent.show, say how it ended",
+            .params = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "through_turn", .summary = "Fork through this turn; the latest when omitted (harnesses that can)", .type = .{ .kind = .string } },
+                .{ .name = "task", .summary = "The new agent's first prompt; without one it starts settled, until agent.send", .type = .{ .kind = .string } },
+            },
+            .result = .{ .kind = .object, .fields = .{
+                .{ .name = "agent", .summary = "The agent forked", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "key", .summary = "This fork's key, as agent.fork_ended and forks name it", .type = .{ .kind = .string }, .required = true },
+            } },
+            .errors = .{
+                .{ .code = "not_found.agent", .summary = "No agent with this ID" },
+                .{ .code = "not_found.turn", .summary = "No such turn, or the harness has no id for it" },
+                .{ .code = "invalid_params.task", .summary = "The task is empty" },
+                .{ .code = "denied.spawn_disabled", .summary = "An agent asked, and agents.spawn.allow is off" },
+                .{ .code = "denied.spawn_depth", .summary = "An agent asked, and the fork would be deeper than agents.spawn.depth" },
+                .{ .code = "conflict.parent_stopped", .summary = "The agent asking is stopping or has no turn running" },
+                .{ .code = "unsupported.harness_capability", .summary = "Its harness cannot fork, or not at a turn" },
+                .{ .code = "conflict.turn_running", .summary = "A turn is running" },
+                .{ .code = "conflict.handed_over", .summary = "The harness's own TUI has the agent" },
+                .{ .code = "conflict.invalid_transition", .summary = "The agent is archived" },
+                .{ .code = "not_found.harness_session", .summary = "It has no conversation yet" },
+            },
+            .grant = .write,
+            .examples = .{.{ .params = .{ .agent = "a1", .task = "Summarize where the work stands." }, .result = .{ .agent = "a1", .key = "fork:a1:1" } }},
+        },
+        .{
+            .name = "agent.mcp_off",
+            .summary = "Turn MCP servers off for an agent, between turns: its next harness process starts without them",
+            .params = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "servers", .summary = "Servers to turn off; the ones it has not used when omitted", .type = .{ .kind = .array, .items = .{ .kind = .string } } },
+            },
+            .result = .{ .kind = .object, .fields = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "off", .summary = "The servers this call turned off", .type = .{ .kind = .array, .items = .{ .kind = .string } }, .required = true },
+            } },
+            .errors = .{
+                .{ .code = "not_found.agent", .summary = "No agent with this ID" },
+                .{ .code = "invalid_params.servers", .summary = "venom's own server, or one its harness did not report" },
+                .{ .code = "unsupported.harness_capability", .summary = "Its harness cannot turn MCP servers off" },
+                .{ .code = "conflict.turn_running", .summary = "A turn is running" },
+                .{ .code = "conflict.handed_over", .summary = "The harness's own TUI has the agent" },
+            },
+            .grant = .write,
+            .examples = .{.{ .params = .{ .agent = "a1" }, .result = .{ .agent = "a1", .off = .{"linear"} } }},
+        },
+
+        .{
+            .name = "usage.show",
+            .summary = "Show token usage, turns, tool calls and wall time by agent, workspace or harness",
+            .params = .{
+                .{ .name = "group", .summary = "Group rows by agent, workspace or harness", .type = .{ .kind = .string, .choices = .{ "agent", "workspace", "harness" } }, .default = "agent" },
+                .{ .name = "range", .summary = "today, 7d or 30d: calendar days in UTC, today included", .type = .{ .kind = .string, .choices = .{ "today", "7d", "30d" } }, .default = "today" },
+            },
+            .result = .{ .kind = .object, .fields = .{
+                .{ .name = "group", .summary = "The grouping", .type = .{ .kind = .string, .choices = .{ "agent", "workspace", "harness" } }, .required = true },
+                .{ .name = "range", .summary = "The range", .type = .{ .kind = .string, .choices = .{ "today", "7d", "30d" } }, .required = true },
+                .{ .name = "since", .summary = "Range start, ms since the Unix epoch", .type = .{ .kind = .integer }, .required = true },
+                .{ .name = "until", .summary = "Now, ms since the Unix epoch", .type = .{ .kind = .integer }, .required = true },
+                .{ .name = "rows", .summary = "Rows with turns in the range: agents in creation order, other keys sorted", .type = .{ .kind = .array, .items = .{ .kind = .object, .fields = .{
+                    .{ .name = "key", .summary = "Agent ID, workspace path or harness id", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "agents", .summary = "Agents with turns in the range (1 for an agent row)", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                    .{ .name = "turns", .summary = "Turns started in the range", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                    .{ .name = "tool_calls", .summary = "Tool calls in those turns", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                    .{ .name = "tokens_in", .summary = "Input tokens", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                    .{ .name = "tokens_out", .summary = "Output tokens", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                    .{ .name = "cache_read", .summary = "Cache-read tokens", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                    .{ .name = "cache_write", .summary = "Cache-write tokens", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                    .{ .name = "wall_ms", .summary = "Wall time of those turns, ms (a running turn up to now)", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                    .{ .name = "title", .summary = "Agent title (agent rows)", .type = .{ .kind = .string } },
+                    .{ .name = "harness", .summary = "Harness id (agent rows)", .type = .{ .kind = .string } },
+                    .{ .name = "workspace", .summary = "Workspace (agent rows)", .type = .{ .kind = .string } },
+                    .{ .name = "parent", .summary = "Parent agent ID (agent rows of sub-agents)", .type = .{ .kind = .string } },
+                    .{ .name = "tree", .summary = "The agent and its sub-agents, in the range (agent rows)", .type = .{ .kind = .object, .fields = .{
+                        .{ .name = "turns", .summary = "Turns started in the range", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                        .{ .name = "tool_calls", .summary = "Tool calls in those turns", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                        .{ .name = "tokens_in", .summary = "Input tokens", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                        .{ .name = "tokens_out", .summary = "Output tokens", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                        .{ .name = "cache_read", .summary = "Cache-read tokens", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                        .{ .name = "cache_write", .summary = "Cache-write tokens", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                        .{ .name = "wall_ms", .summary = "Wall time of those turns, ms (a running turn up to now)", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                    } } },
+                    .{ .name = "context", .summary = "Latest context size the harness reported (agent rows; absent until reported)", .type = .{ .kind = .object, .fields = .{
+                        .{ .name = "used", .summary = "Tokens in the context", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                        .{ .name = "window", .summary = "Context window, tokens", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                        .{ .name = "source", .summary = "exact or estimate", .type = .{ .kind = .string }, .required = true },
+                        .{ .name = "at", .summary = "When reported, ms since the Unix epoch", .type = .{ .kind = .integer }, .required = true },
+                    } } },
+                } } }, .required = true },
+                .{ .name = "total", .summary = "All agents' own numbers in the range", .type = .{ .kind = .object, .fields = .{
+                    .{ .name = "turns", .summary = "Turns started in the range", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                    .{ .name = "tool_calls", .summary = "Tool calls in those turns", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                    .{ .name = "tokens_in", .summary = "Input tokens", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                    .{ .name = "tokens_out", .summary = "Output tokens", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                    .{ .name = "cache_read", .summary = "Cache-read tokens", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                    .{ .name = "cache_write", .summary = "Cache-write tokens", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                    .{ .name = "wall_ms", .summary = "Wall time of those turns, ms (a running turn up to now)", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                } }, .required = true },
+            } },
+            .grant = .read,
+            .examples = .{.{ .params = .{ .group = "harness", .range = "7d" }, .result = .{ .group = "harness", .range = "7d", .since = 1793491200000, .until = 1794000000000, .rows = .{.{ .key = "claude-code", .agents = 2, .turns = 5, .tool_calls = 31, .tokens_in = 12000, .tokens_out = 8120, .cache_read = 402100, .cache_write = 20480, .wall_ms = 941000 }}, .total = .{ .turns = 5, .tool_calls = 31, .tokens_in = 12000, .tokens_out = 8120, .cache_read = 402100, .cache_write = 20480, .wall_ms = 941000 } } }},
+        },
+
+        .{
+            .name = "usage.export",
+            .summary = "Export usage.show rows as CSV (header: range,since,until,group,key,agents,turns,tool_calls,tokens_in,tokens_out,cache_read,cache_write,wall_ms)",
+            .params = .{
+                .{ .name = "group", .summary = "Group rows by agent, workspace or harness", .type = .{ .kind = .string, .choices = .{ "agent", "workspace", "harness" } }, .default = "agent" },
+                .{ .name = "range", .summary = "today, 7d or 30d: calendar days in UTC, today included", .type = .{ .kind = .string, .choices = .{ "today", "7d", "30d" } }, .default = "today" },
+            },
+            .result = .{ .kind = .object, .fields = .{
+                .{ .name = "group", .summary = "The grouping", .type = .{ .kind = .string, .choices = .{ "agent", "workspace", "harness" } }, .required = true },
+                .{ .name = "range", .summary = "The range", .type = .{ .kind = .string, .choices = .{ "today", "7d", "30d" } }, .required = true },
+                .{ .name = "since", .summary = "Range start, ms since the Unix epoch", .type = .{ .kind = .integer }, .required = true },
+                .{ .name = "until", .summary = "Now, ms since the Unix epoch", .type = .{ .kind = .integer }, .required = true },
+                .{ .name = "header", .summary = "The CSV columns, in order", .type = .{ .kind = .array, .items = .{ .kind = .string } }, .required = true },
+                .{ .name = "rows", .summary = "Data lines after the header", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                .{ .name = "csv", .summary = "RFC 4180 text with CRLF line ends: the header line, then one line per row", .type = .{ .kind = .string }, .required = true },
+            } },
+            .grant = .read,
+            .examples = .{.{ .params = .{ .group = "workspace", .range = "today" }, .result = .{ .group = "workspace", .range = "today", .since = 1793923200000, .until = 1794000000000, .header = .{ "range", "since", "until", "group", "key", "agents", "turns", "tool_calls", "tokens_in", "tokens_out", "cache_read", "cache_write", "wall_ms" }, .rows = 1, .csv = "range,since,until,group,key,agents,turns,tool_calls,tokens_in,tokens_out,cache_read,cache_write,wall_ms\r\ntoday,1793923200000,1794000000000,workspace,/home/me/scratch,1,2,3,1200,812,40210,2048,61000\r\n" } }},
+        },
+
+        .{
+            .name = "inbox.list",
+            .summary = "List what needs a human: blocking kinds first (approval, question, plan, failed, limit), then review; oldest first",
+            .params = .{
+                .{ .name = "snoozed", .summary = "Include snoozed items", .type = .{ .kind = .boolean }, .default = false },
+            },
+            .result = .{ .kind = .object, .fields = .{
+                .{ .name = "items", .summary = "Inbox items, most urgent first", .type = .{ .kind = .array, .items = .{ .kind = .object, .fields = .{
+                    .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "kind", .summary = "Attention kind", .type = .{ .kind = .string, .choices = .{ "approval", "question", "plan", "failed", "limit", "review" } }, .required = true },
+                    .{ .name = "age_s", .summary = "Seconds since the item appeared", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                    .{ .name = "reason", .summary = "What the agent asks, or why it needs you", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "item", .summary = "Item ID: the request ID, or the kind for failed, limit and review", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "request", .summary = "Request ID (approval, question, plan)", .type = .{ .kind = .string } },
+                    .{ .name = "blocking", .summary = "The agent waits on a human", .type = .{ .kind = .boolean }, .required = true },
+                    .{ .name = "level", .summary = "Attention level: urgent, warn or info", .type = .{ .kind = .string, .choices = .{ "urgent", "warn", "info" } }, .required = true },
+                    .{ .name = "title", .summary = "The agent's title", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "state", .summary = "The agent's state", .type = .{ .kind = .string, .choices = .{ "queued", "running", "needs_you", "failed", "settled", "handed_over", "archived" } }, .required = true },
+                    .{ .name = "stale", .summary = "The harness process that asked is gone; answering resumes the agent", .type = .{ .kind = .boolean }, .required = true },
+                    .{ .name = "answers", .summary = "Answers the harness accepts (approval); empty: any", .type = .{ .kind = .array, .items = .{ .kind = .string } }, .required = true },
+                    .{ .name = "grant", .summary = "The narrowest grant allow_always records, e.g. exec:zig (approval)", .type = .{ .kind = .string } },
+                    .{ .name = "outside_scope", .summary = "A write outside the agent's scope, by an edit or a command: always asked, never answered by an allow-always grant (approval)", .type = .{ .kind = .boolean }, .required = true },
+                    .{ .name = "options", .summary = "What a question offers, per question: id (q1, q2, … by position, the key of the answer's args), the question's text and its option labels in order; 1-9 pick one", .type = .{ .kind = .array, .items = .{ .kind = .object, .fields = .{
+                        .{ .name = "id", .summary = "q1, q2, … by position", .type = .{ .kind = .string }, .required = true },
+                        .{ .name = "question", .summary = "The question's text", .type = .{ .kind = .string }, .required = true },
+                        .{ .name = "labels", .summary = "Option labels, in the order the harness lists them", .type = .{ .kind = .array, .items = .{ .kind = .string } }, .required = true },
+                        .{ .name = "free_text", .summary = "The harness takes a typed answer besides the labels: an answer to this question may be any one string", .type = .{ .kind = .boolean }, .required = true },
+                        .{ .name = "labels_omitted", .summary = "Some of the harness's labels are not listed (too many, not plain, over the size bound): the answer is not checked against labels", .type = .{ .kind = .boolean }, .required = true },
+                    } } }, .required = true },
+                    .{ .name = "snoozed_until", .summary = "Snoozed until, ms since the Unix epoch", .type = .{ .kind = .integer } },
+                    .{ .name = "resets_at", .summary = "When a usage limit resets, RFC 3339 UTC (limit, when the harness said)", .type = .{ .kind = .string } },
+                    .{ .name = "away", .summary = "Waiting in the harness's own TUI while handed over: answered there, focus its split", .type = .{ .kind = .boolean }, .required = true },
+                    .{ .name = "context", .summary = "Text of the agent's last turns, oldest first", .type = .{ .kind = .array, .items = .{ .kind = .object, .fields = .{
+                        .{ .name = "turn", .summary = "Turn ID", .type = .{ .kind = .string }, .required = true },
+                        .{ .name = "text", .summary = "Message text", .type = .{ .kind = .string }, .required = true },
+                    } } }, .required = true },
+                } } }, .required = true },
+            } },
+            .grant = .read,
+            .examples = .{.{ .params = .{}, .result = .{ .items = .{} } }},
+        },
+
+        .{
+            .name = "inbox.answer",
+            .summary = "Answer an agent's pending request (approval, question or plan)",
+            .params = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "answer", .summary = "approval: allow_once, allow_always (keeps the request's grant for the workspace), allow_edited, deny or cancel_turn; plan: approve, reject or cancel_turn; question: the reply. A question that takes labels only needs one of its listed labels (also in args, by question id); one that takes a typed answer accepts any string; one whose options were cut cannot be answered here, only in the harness", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "request", .summary = "Request ID; the agent's oldest pending request when omitted", .type = .{ .kind = .string } },
+                .{ .name = "reason", .summary = "Deny reason or reject feedback; reaches the model", .type = .{ .kind = .string } },
+                .{ .name = "args", .summary = "JSON object: edited arguments (allow_edited) or picks per question", .type = .{ .kind = .string } },
+            },
+            .result = .{ .kind = .object, .fields = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "request", .summary = "The answered request", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "answer", .summary = "The answer", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "state", .summary = "The agent's state", .type = .{ .kind = .string, .choices = .{ "queued", "running", "needs_you", "failed", "settled", "handed_over", "archived" } }, .required = true },
+            } },
+            .errors = .{
+                .{ .code = "denied.agent_approval", .summary = "Only a person can allow or approve; an agent may deny, reject or cancel the turn. The request stays pending" },
+                .{ .code = "not_found.agent", .summary = "No agent with this ID" },
+                .{ .code = "not_found.request", .summary = "The agent has no such pending request" },
+                .{ .code = "conflict.request_resolved", .summary = "The request was already answered or withdrawn" },
+                .{ .code = "invalid_params.answer", .summary = "The answer does not fit the request's kind or the harness's answers" },
+            },
+            .grant = .write,
+            .examples = .{.{ .params = .{ .agent = "a2", .answer = "allow_once" }, .result = .{ .agent = "a2", .request = "r1", .answer = "allow_once", .state = "running" } }},
+        },
+
+        .{
+            .name = "inbox.batch",
+            .summary = "Answer several marked approvals at once (Y / N); they must all request the same grant",
+            .params = .{
+                .{ .name = "items", .summary = "The marked approvals", .type = .{ .kind = .array, .items = .{ .kind = .object, .fields = .{
+                    .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "request", .summary = "Request ID", .type = .{ .kind = .string }, .required = true },
+                } } }, .required = true },
+                .{ .name = "answer", .summary = "allow_once, allow_always or deny", .type = .{ .kind = .string, .choices = .{ "allow_once", "allow_always", "deny" } }, .required = true },
+                .{ .name = "reason", .summary = "Deny reason; reaches the model", .type = .{ .kind = .string } },
+            },
+            .result = .{ .kind = .object, .fields = .{
+                .{ .name = "answer", .summary = "The answer", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "grant", .summary = "The grant every item requested", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "answered", .summary = "The answered approvals, in order", .type = .{ .kind = .array, .items = .{ .kind = .object, .fields = .{
+                    .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "request", .summary = "Request ID", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "state", .summary = "The agent's state", .type = .{ .kind = .string, .choices = .{ "queued", "running", "needs_you", "failed", "settled", "handed_over", "archived" } }, .required = true },
+                } } }, .required = true },
+            } },
+            .errors = .{
+                .{ .code = "denied.agent_approval", .summary = "Only a person can allow or approve; an agent may deny, reject or cancel the turn. The request stays pending" },
+                .{ .code = "not_found.agent", .summary = "No agent with this ID" },
+                .{ .code = "not_found.request", .summary = "An agent has no such pending request" },
+                .{ .code = "conflict.request_resolved", .summary = "A request was already answered or withdrawn" },
+                .{ .code = "invalid_params.answer", .summary = "The answer does not fit a request's harness answers" },
+                .{ .code = "invalid_params.batch", .summary = "Empty, repeated, not only approvals, or mixed grants; nothing was answered" },
+                .{ .code = "denied.self_approval", .summary = "An item is the caller's own agent or a descendant, or an agent tried allow_always" },
+            },
+            .grant = .write,
+            .examples = .{.{ .params = .{ .items = .{ .{ .agent = "a2", .request = "r1" }, .{ .agent = "a5", .request = "r3" } }, .answer = "allow_once" }, .result = .{ .answer = "allow_once", .grant = "exec:zig", .answered = .{ .{ .agent = "a2", .request = "r1", .state = "running" }, .{ .agent = "a5", .request = "r3", .state = "running" } } } }},
+        },
+
+        .{
+            .name = "always.list",
+            .summary = "List the standing allow-always grants (per workspace), e.g. exec:zig",
+            .params = .{
+                .{ .name = "workspace", .summary = "Only this workspace's grants", .type = .{ .kind = .string } },
+            },
+            .result = .{ .kind = .object, .fields = .{
+                .{ .name = "grants", .summary = "Standing grants, oldest first", .type = .{ .kind = .array, .items = .{ .kind = .object, .fields = .{
+                    .{ .name = "workspace", .summary = "Workspace path", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "grant", .summary = "The grant, e.g. exec:zig or edit:src/proto.zig", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "agent", .summary = "The agent whose approval recorded it", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "request", .summary = "The request that recorded it", .type = .{ .kind = .string }, .required = true },
+                    .{ .name = "at", .summary = "Recorded at, ms since the Unix epoch", .type = .{ .kind = .integer }, .required = true },
+                } } }, .required = true },
+            } },
+            .grant = .read,
+            .examples = .{.{ .params = .{}, .result = .{ .grants = .{.{ .workspace = "/home/me/venom-org", .grant = "exec:zig", .agent = "a2", .request = "r1", .at = 1794000000000 }} } }},
+        },
+
+        .{
+            .name = "always.revoke",
+            .summary = "Revoke a standing allow-always grant; matching approvals ask again",
+            .params = .{
+                .{ .name = "workspace", .summary = "Workspace path, as always list shows it", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "grant", .summary = "The grant, e.g. exec:zig", .type = .{ .kind = .string }, .required = true },
+            },
+            .result = .{ .kind = .object, .fields = .{
+                .{ .name = "workspace", .summary = "Workspace path", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "grant", .summary = "The revoked grant", .type = .{ .kind = .string }, .required = true },
+            } },
+            .errors = .{
+                .{ .code = "not_found.grant", .summary = "No such standing grant" },
+            },
+            .grant = .write,
+            .examples = .{.{ .params = .{ .workspace = "/home/me/venom-org", .grant = "exec:zig" }, .result = .{ .workspace = "/home/me/venom-org", .grant = "exec:zig" } }},
+        },
+
+        .{
+            .name = "inbox.snooze",
+            .summary = "Hide an inbox item for a while (15m by default)",
+            .params = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "item", .summary = "Request ID, or failed, limit or review; the agent's most urgent item when omitted", .type = .{ .kind = .string } },
+                .{ .name = "duration", .summary = "How long, e.g. 15m or 2h", .type = .{ .kind = .string }, .default = "15m" },
+            },
+            .result = .{ .kind = .object, .fields = .{
+                .{ .name = "agent", .summary = "Agent ID", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "item", .summary = "The snoozed item", .type = .{ .kind = .string }, .required = true },
+                .{ .name = "until", .summary = "Hidden until, ms since the Unix epoch", .type = .{ .kind = .integer }, .required = true },
+            } },
+            .errors = .{
+                .{ .code = "not_found.agent", .summary = "No agent with this ID" },
+                .{ .code = "not_found.item", .summary = "The agent has no such inbox item" },
+                .{ .code = "invalid_params.duration", .summary = "Not a duration such as 15m" },
+            },
+            .grant = .write,
+            .examples = .{.{ .params = .{ .agent = "a2" }, .result = .{ .agent = "a2", .item = "r1", .until = 1794000900000 } }},
+        },
+    },
+}

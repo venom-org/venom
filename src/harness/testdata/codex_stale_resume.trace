@@ -1,0 +1,36 @@
+# A crash with an approval pending, then a resume whose re-asked command is
+# answered from the one-shot decision.
+> {"method":"initialize","id":0}
+< {"id":0,"result":{"userAgent":"codex_cli_rs/0.167.0 (Linux; x86_64)"}}
+> {"method":"initialized","params":{}}
+> {"method":"thread/start","id":1}
+< {"id":1,"result":{"thread":{"id":"thr_s"},"model":"m"}}
+> {"method":"account/read","id":90}
+< {"id":90,"result":{"account":null,"requiresOpenaiAuth":true}}
+> {"method":"account/rateLimits/read","id":91}
+< {"id":91,"error":{"code":-32600,"message":"rate limits need a ChatGPT sign-in"}}
+> {"method":"turn/start","id":2}
+< {"id":2,"result":{"turn":{"id":"turn_1","status":"inProgress","items":[]}}}
+< {"method":"turn/started","params":{"threadId":"thr_s","turn":{"id":"turn_1","status":"inProgress","items":[]}}}
+< {"method":"item/started","params":{"threadId":"thr_s","turnId":"turn_1","item":{"type":"commandExecution","id":"i1","command":"make","cwd":"$CWD","status":"inProgress","commandActions":[]}}}
+< {"method":"item/commandExecution/requestApproval","id":50,"params":{"threadId":"thr_s","turnId":"turn_1","itemId":"i1","command":"make","cwd":"$CWD"}}
+! exit 3
+=== process
+> {"method":"initialize","id":0}
+< {"id":0,"result":{"userAgent":"codex_cli_rs/0.167.0 (Linux; x86_64)"}}
+> {"method":"initialized","params":{}}
+> {"method":"thread/resume","id":1,"params":{"threadId":"thr_s"}}
+< {"id":1,"result":{"thread":{"id":"thr_s"},"model":"m"}}
+> {"method":"account/read","id":90}
+< {"id":90,"result":{"account":null,"requiresOpenaiAuth":true}}
+> {"method":"account/rateLimits/read","id":91}
+< {"id":91,"error":{"code":-32600,"message":"rate limits need a ChatGPT sign-in"}}
+> {"method":"turn/start","id":2,"params":{"threadId":"thr_s","input":[{"type":"text","text":"Continue from where you stopped.","text_elements":[]}]}}
+< {"id":2,"result":{"turn":{"id":"turn_2","status":"inProgress","items":[]}}}
+< {"method":"turn/started","params":{"threadId":"thr_s","turn":{"id":"turn_2","status":"inProgress","items":[]}}}
+< {"method":"item/started","params":{"threadId":"thr_s","turnId":"turn_2","item":{"type":"commandExecution","id":"i7","command":"make","cwd":"$CWD","status":"inProgress","commandActions":[]}}}
+< {"method":"item/commandExecution/requestApproval","id":51,"params":{"threadId":"thr_s","turnId":"turn_2","itemId":"i7","command":"make","cwd":"$CWD"}}
+> {"id":51,"result":{"decision":"accept"}}
+< {"method":"serverRequest/resolved","params":{"threadId":"thr_s","requestId":51}}
+< {"method":"item/completed","params":{"threadId":"thr_s","turnId":"turn_2","item":{"type":"commandExecution","id":"i7","command":"make","cwd":"$CWD","status":"completed","commandActions":[],"exitCode":0}}}
+< {"method":"turn/completed","params":{"threadId":"thr_s","turn":{"id":"turn_2","status":"completed","error":null,"items":[]}}}
