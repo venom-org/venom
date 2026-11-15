@@ -31,6 +31,12 @@ const ta = testing.allocator;
 const Value = std.json.Value;
 
 /// venom's verbs plus `events` (the inbox tests read the published events).
+/// `tui.hold` is not under test here (holds_tests.zig has it).
+const HoldStub = struct {
+    pub fn call(_: *HoldStub, call_: *proto.Call) anyerror!void {
+        return call_.ok(struct {}{});
+    }
+};
 const model = cli.manifest.normalize(.{ .format = main.input.format, .tool = main.input.tool, .summary = main.input.summary, .verbs = main.input.verbs ++ .{eventlog.catalog.events_manifest} });
 
 /// "slow" turns run until interrupted; anything else answers at once.
@@ -64,6 +70,7 @@ pub const Daemon = struct {
     engine: eventlog.Engine,
     runner: harnesses.Runner,
     harness_verbs: harnesses.Verbs,
+    hold_stub: HoldStub = .{},
     workspaces: Workspaces,
     ws_add: Workspaces.Add,
     ws_remove: Workspaces.Remove,
@@ -196,6 +203,7 @@ pub const Daemon = struct {
             .{ .verb = "workspace.remove", .handler = proto.VerbHandler.typed(Workspaces.PathParams, &self.ws_remove) },
             .{ .verb = "workspace.scan", .handler = proto.VerbHandler.typed(Workspaces.ScanParams, &self.ws_scan) },
             .{ .verb = "events", .handler = proto.VerbHandler.init(&self.events) },
+            .{ .verb = "tui.hold", .handler = proto.VerbHandler.init(&self.hold_stub) },
         } ++ self.agents.bindings() ++ self.usage.bindings() ++ self.context_verbs.bindings() ++ self.inbox.bindings() ++ self.harness_verbs.bindings();
         self.dispatcher = try proto.Dispatcher.init(ta, &model, &handlers, .{}, null);
         errdefer self.dispatcher.deinit();

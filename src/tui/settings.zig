@@ -93,6 +93,8 @@ pub const sections = [_]Section{
         .{ .key = "log.stderr_level", .label = "Log level on stderr", .kind = choice(log.Level) },
         .{ .key = "log.stderr_format", .label = "Log format on stderr", .kind = choice(log.Format) },
         .{ .key = "log.file_format", .label = "Log format in the file", .kind = choice(log.Format) },
+        .{ .key = "daemon.interactive_start", .label = "Start the daemon from venom", .help = "A bare venom starts a missing daemon, which stops after the last TUI quits.", .kind = .toggle },
+        .{ .key = "daemon.startup_timeout_ms", .label = "Daemon startup budget", .help = "Milliseconds, 100 to 60000.", .kind = .zon },
     } },
     .{ .name = "Workspaces", .fields = &.{f_group} },
     .{ .name = "Agents", .fields = &.{
@@ -435,7 +437,10 @@ pub const Settings = struct {
                     if (changeNeedsRestart(body.ok)) self.restart_required = true;
                     if (self.failure) |f| {
                         app.say("{s}: {s}; {d} saved before it and reloaded", .{ f.key, f.code, self.applied });
-                    } else if (self.restart_required) app.say("saved; restart the daemon (venom serve) for it to apply", .{}) else app.say("saved and reloaded", .{});
+                    } else if (self.restart_required) {
+                        // An on-demand daemon restarts when venom does.
+                        if (app.hold != null and app.hold.?.on_demand) app.say("saved; quit every venom and start venom again for it to apply", .{}) else app.say("saved; restart the daemon (venom serve) for it to apply", .{});
+                    } else app.say("saved and reloaded", .{});
                 }
                 try self.requestValues(app);
             },

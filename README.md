@@ -15,10 +15,25 @@ Zig 0.17 (see `.zigversion`). `zig build` fetches `venom-std` and `venom-term` a
 ```sh
 zig build                 # zig-out/bin/venom
 zig build test            # unit tests + agent-contract conformance
-venom serve               # start the daemon
+venom                     # the TUI; starts a daemon when none runs
+venom serve               # or run the daemon yourself (persistent)
 venom doctor --json       # health report
 venom mcp                 # MCP server over stdio
 venom --help              # every verb, generated from src/verbs.zon
+```
+
+## The daemon's lifetime
+
+Whoever starts the daemon decides how long it runs.
+
+- **`venom` in a terminal, with no daemon running**, starts one: `venom serve --lifetime on-demand --origin interactive`, detached in its own session, in `$HOME`, without your tokens. It stops 5 s after the last venom TUI quits, so quitting and starting `venom` again keeps it. Running agents are stopped cleanly then: each turn ends `interrupted`, and the next send continues the same conversation. Queued agents stay queued until venom runs again. When quitting would stop work like that, venom asks first.
+- **`venom serve`**, by hand or from a supervisor, is persistent: TUIs come and go, and only a signal stops it. `venom serve --lifetime on-demand` follows the on-demand rules, and with no TUI exits after 5 s.
+- **Agents, hooks, MCP and every other command never start a daemon.** With none running they fail with `unavailable.not_running`. So does `venom` inside a venomx pane or an agent (`denied.startup_context`), with a `VENOM_TOKEN` of its own, or with `daemon.interactive_start = false`: start `venom` in a terminal outside venomx.
+
+`daemon.interactive_start` (default `true`) and `daemon.startup_timeout_ms` (default `5000`, the TUI's budget to get a daemon ready) are restart-only and belong in your user config. A supervised setup sets `daemon.interactive_start = false`, so a stray `venom` never starts a second daemon. `venom doctor` shows the lifetime, who started the daemon and how many TUIs hold it.
+
+```sh
+zig build test-on-demand   # bare venom on pseudo-terminals: start, linger, races, a crash, refusals
 ```
 
 ## End-to-end demo: 3 agents, 3 worktrees, approved from the CLI
@@ -66,7 +81,7 @@ zig build test-host -Dvenomx=<path>      # the same with that venomx binary
 
 A process in a venomx pane, or in a split of venom's own TUI, is refused venom's owner file, and an agent is refused venomx's. A pane looks the same whether a person or an agent runs in it. So:
 
-- **Start `venom` in a terminal outside venomx.** With a venomx daemon up you get a control pane, with everything but `admin`. Its agents keep running if that pane ends.
+- **Start `venom` in a terminal outside venomx.** It starts venom's daemon if none runs. With a venomx daemon up you get a control pane, with everything but `admin`. Its agents keep running if that pane ends, as long as another venom TUI holds an on-demand daemon or the daemon is persistent; detaching venomx keeps the control pane running.
 - **To save settings, stop the daemon or read the audit log,** use a terminal outside venomx: `venom settings`, or `VENOM_TOKEN=@owner venom …`. The settings and inbox popups (`ctrl+a v s`, `v i`) only read; save and answer in the control pane.
 - **To use venom from a pane of your own,** issue a token outside venomx, then set it in the pane:
   ```bash

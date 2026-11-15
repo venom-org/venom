@@ -1258,5 +1258,26 @@
             .grant = .write,
             .examples = .{.{ .params = .{ .agent = "a2" }, .result = .{ .agent = "a2", .item = "r1", .until = 1794000900000 } }},
         },
+
+        .{
+            .name = "tui.hold",
+            .summary = "Hold the daemon for a venom TUI: while any hold lasts, an on-demand daemon keeps running, and it stops 5 s after the last one ends. venom's TUI sends it on every connect; only the owner and person principals may hold. Agents, hooks and scripts never need it",
+            .params = .{},
+            .streams = true,
+            .item = .{ .kind = .object, .fields = .{
+                .{ .name = "lifetime", .summary = "The daemon's latched lifetime", .type = .{ .kind = .string, .choices = .{ "persistent", "on-demand" } }, .required = true },
+                .{ .name = "origin", .summary = "Who started the daemon", .type = .{ .kind = .string, .choices = .{ "serve", "interactive" } }, .required = true },
+                .{ .name = "phase", .summary = "The daemon's lifetime state", .type = .{ .kind = .string, .choices = .{ "awaiting_first_client", "active", "lingering", "stopping" } }, .required = true },
+                .{ .name = "clients", .summary = "Holds the daemon counts, this one included", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+                .{ .name = "others", .summary = "Holds that do not end with the caller: the caller's own and those bound below its process do not count", .type = .{ .kind = .integer, .min = 0 }, .required = true },
+            } },
+            .result = .{ .kind = .object, .fields = .{} },
+            .errors = .{
+                .{ .code = "denied.tui_hold", .summary = "Only the owner and person principals may hold the daemon" },
+                .{ .code = "denied.revoked", .summary = "The holder's principal was revoked or expired" },
+                .{ .code = "unavailable.shutdown", .summary = "The daemon is stopping" },
+            },
+            .grant = .read,
+        },
     },
 }

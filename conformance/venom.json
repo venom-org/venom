@@ -16,5 +16,6 @@
       "before": {"principal": "unknown", "kind": "unknown", "parent": null, "grants": [{"right": "read", "scope": "*"}], "namespace": "user", "expires": null},
       "after": {"principal": "unknown", "kind": "unknown", "parent": null, "grants": [{"right": "read", "scope": "config:root"}], "namespace": "user", "expires": null}
     }
-  }
+  },
+  "no_daemon": {"fix": "venom doctor --json", "message": "No daemon at the selected socket; a human runs `venom` in a terminal outside venomx; agents never start it"}
 }

@@ -285,7 +285,7 @@ pub const table = [_]Binding{
     .{ .keys = "⇥ ⇧⇥", .label = "next / previous area", .action = .{ .local = .focus }, .context = .any },
     .{ .keys = "esc", .label = "back one step; keeps the draft", .action = .{ .local = .back }, .context = .any },
     .{ .keys = "?", .label = "keys (this help)", .action = .{ .local = .help }, .context = .any },
-    .{ .keys = "q ⌃c", .label = "quit (agents keep running)", .action = .{ .local = .quit }, .context = .any },
+    .{ .keys = "q ⌃c", .label = "quit (asks first if that stops agents)", .action = .{ .local = .quit }, .context = .any },
     // The leader tree. `leader leader` is the switcher
     // and `leader :` the command prompt; the router
     // takes the first itself, so neither is a row here.

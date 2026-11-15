@@ -30,6 +30,10 @@ directory under a temp root, and fake harnesses as in scripts/demo.py.
    accepted because venomx confirms the pid; it gives that pane `pane.attention`
    and the agent shows in "Needs you"; the mark clears on take back. Other
    processes and a venomx that can't say are refused.
+7. On demand: with no venom daemon, a bare `venom` outside venomx starts one
+   and hands it to its control pane without it stopping; detached, the
+   control pane and its agent views keep it; quitting the control pane (after
+   its confirmation) stops it after the linger.
 
 Needs a built venomx (optional for venom itself, so this is not part of
 `zig build test`; `zig build test-host` runs it). Exit status 0 when it passed.
@@ -117,7 +121,9 @@ class Terminal:
             except subprocess.TimeoutExpired:
                 os.killpg(self.proc.pid, signal.SIGKILL)
                 self.proc.wait()
-        os.close(self.master)
+        if self.master >= 0:
+            os.close(self.master)
+            self.master = -1
 
 
 class Demo(e2e.Demo):
@@ -1227,6 +1233,82 @@ class Demo(e2e.Demo):
         self.quit_control(cp)
         log("PASS attention while away: hook, pane.attention, Needs you, cleared on take back; unproved pids refused")
 
+    # --- 7: an on-demand daemon from outside venomx ------------------------------
+
+    def venom_pid(self):
+        """The pid of the daemon holding venom's lock, if one does."""
+        try:
+            with open(os.path.join(self.env["XDG_RUNTIME_DIR"], "venom", "venom.lock")) as f:
+                pid = int(f.read().strip() or "0")
+        except (OSError, ValueError):
+            return None
+        return pid if pid > 0 and os.path.exists("/proc/%d" % pid) else None
+
+    def doctor_checks(self):
+        # The fake harnesses fail their protocol checks: read the report anyway.
+        return {c["id"]: c for c in self.cli("doctor", ok=False)["checks"]}
+
+    def on_demand_host(self):
+        # A clean slate: no venom pane left to hold a new daemon, no daemon.
+        for t in self.terms:
+            t.close()
+        for p in self.panes():
+            if not p["exited"]:
+                self.vx("pane", "kill", "--pane=" + p["pane"], "--remove=true", ok=False)
+        until("venom's panes to go", lambda: not any(not p["exited"] and self.tags(p).get("product") == "venom" for p in self.panes()))
+        self.stop()
+        until("the persistent daemon to stop", lambda: self.venom_pid() is None)
+
+        # A bare venom from outside venomx starts one and hands it to a control pane.
+        t = self.terminal()
+        cp = until("a control pane", self.control)["pane"]
+        pid = until("an on-demand daemon", self.venom_pid)
+        checks = self.doctor_checks()
+        if not checks["daemon.lifetime"]["message"].startswith("on-demand") or not checks["daemon.origin"]["message"].startswith("origin interactive"):
+            raise Failed("doctor: %s / %s" % (checks["daemon.lifetime"], checks["daemon.origin"]))
+        until("the control pane's bar", lambda: "need you" in self.capture(cp))
+        # Past the first-client grace and the linger: the handoff kept it.
+        time.sleep(6)
+        if self.venom_pid() != pid or self.doctor_checks()["daemon.lifecycle"]["message"].split(";")[0] != "state active":
+            raise Failed("the daemon did not survive the handoff: %s" % self.doctor_checks()["daemon.lifecycle"])
+        log("PASS on-demand from outside venomx: daemon %d, origin interactive, kept across the handoff" % pid)
+
+        # Two agent views, bound below the control pane, hold too.
+        def key(k):
+            self.vx("pane", "send", "--pane=" + cp, "--text=" + k)
+        key("\r")
+        until("an agent pane", lambda: len(self.agent_panes()) == 1)
+        key("j")
+        time.sleep(0.2)
+        key("\r")
+        until("two agent panes", lambda: len(self.agent_panes()) == 2)
+        until("3 TUI clients", lambda: "3 TUI clients" in self.doctor_checks()["daemon.lifecycle"]["message"])
+
+        # Detached: venomx keeps the control pane, and so the daemon, running.
+        t.close()
+        time.sleep(6)
+        if self.venom_pid() != pid:
+            raise Failed("the daemon stopped with the venomx client")
+        log("PASS detached: the control pane and its views keep the daemon")
+
+        # Quitting the control pane (it asks first only with agents in progress).
+        def alive():
+            return any(p["pane"] == cp and not p["exited"] for p in self.panes())
+
+        def shown():
+            out = self.vx("pane", "capture", "--pane=" + cp, ok=False)
+            return " ".join(out["text"].split()) if out and "text" in out else ""
+        key("q")
+        until("venom to quit or ask", lambda: not alive() or "Quit venom?" in shown())
+        if alive():
+            if "Detaching venomx" not in shown():
+                raise Failed("the quit prompt does not mention detaching: %s" % shown())
+            key("\r")
+            log("quit asked first, naming detach")
+        until("the control pane to go", lambda: not any(p["pane"] == cp and not p["exited"] for p in self.panes()))
+        until("the daemon to stop after the linger", lambda: self.venom_pid() is None and not os.path.exists(os.path.join(self.env["XDG_RUNTIME_DIR"], "venom", "venom.sock")), 20)
+        log("PASS quitting the control pane ends its views' holds and stops the daemon")
+
     # --- all -------------------------------------------------------------------
 
     def run(self):
@@ -1243,6 +1325,7 @@ class Demo(e2e.Demo):
         self.human_pane()
         self.takeover_outlives_tui(second[0])
         self.attention_while_away(second[0])
+        self.on_demand_host()
         log("PASS")
 
     def dump_all(self):

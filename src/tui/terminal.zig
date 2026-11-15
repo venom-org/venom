@@ -2,7 +2,9 @@
 //! full-screen TUI on a real terminal. Everything it shows
 //! comes from the daemon's verbs and events (link.zig); this file only owns
 //! the terminal: raw mode, the alternate screen, resize and the loop.
-//! Closing the TUI never stops an agent.
+//! With no daemon running, a bare `venom` starts an on-demand one
+//! (startup.zig) before anything else; that daemon stops once its last TUI
+//! quits, so quitting then asks first while agents still work.
 const std = @import("std");
 const posix = std.posix;
 const cli = @import("cli");
@@ -30,6 +32,11 @@ pub const local_commands = .{ .{
     .result = .{ .kind = .object, .fields = .{} },
     .errors = .{
         .{ .code = "not_found.agent", .summary = "No agent with this ID" },
+        .{ .code = "unavailable.not_running", .summary = "No daemon, and this view may not start one (a pane view, a VENOM_TOKEN, or daemon.interactive_start false)" },
+        .{ .code = "denied.startup_context", .summary = "No daemon, and venom runs inside a venomx pane, an agent or below a process manager: start it in a terminal outside venomx" },
+        .{ .code = "invalid_params.startup_config", .summary = "No daemon, and the persisted config is invalid, so none was started" },
+        .{ .code = "unavailable.startup_failed", .summary = "The daemon venom started failed, and no other became ready" },
+        .{ .code = "unavailable.startup_deadline", .summary = "No daemon became ready within daemon.startup_timeout_ms" },
     },
 }, .{
     .name = "agent.diff",
@@ -61,6 +68,7 @@ pub const local_commands = .{ .{
         .{ .code = "not_found.agent", .summary = "No agent with this ID" },
         .{ .code = "invalid_params.pane", .summary = "No --pane, and the caller is not in a venomx pane" },
         .{ .code = "unavailable.venomx", .summary = "venomx is not reachable" },
+        .{ .code = "unavailable.not_running", .summary = "The venom daemon is not running; these never start one" },
         .{ .code = "unavailable.folder", .summary = "A shell was asked for and the agent has no folder yet" },
         .{ .code = "denied.spawn", .summary = "The caller's venomx rights do not let it split that pane" },
     },
@@ -133,6 +141,26 @@ pub const Command = struct {
         // Identity is resolved at `accept`, so this comes before the connection
         // the TUI keeps.
         const await_binding = if (ctx.params.object.get("await_binding")) |v| v == .bool and v.bool else false;
+        const solo_view = if (ctx.params.object.get("solo")) |v| v == .bool and v.bool else false;
+        // No daemon: a terminal outside every managed tree starts one, before
+        // this process sets the subreaper, writes its marker or starts any
+        // child, so the daemon never ends up below it.
+        if (ctx.path.environ) |environ| {
+            var connect_err: anyerror = error.NotRunning;
+            const started = @import("startup.zig").ensure(.{
+                .gpa = self.gpa,
+                .a = ctx.allocator,
+                .socket = try absoluteSocket(ctx.allocator, ctx.path),
+                .environ = environ,
+                .connect_environ = link.path.environ,
+                .pane_view = no_owner or solo_view or await_binding,
+                .stopped = self.stopped,
+            }, &connect_err) catch |err| {
+                if (err != error.Connect) return err;
+                return .{ .failure = try connectFailure(ctx, connect_err) };
+            };
+            if (started) |f| return .{ .failure = .{ .code = f.code, .message = f.message } };
+        }
         const bound = await_binding and host_mod.awaitBinding(self.gpa, ctx.allocator, ctx.path);
         // Report a missing daemon or agent before taking the terminal,
         // so scripts get the standard error object.
@@ -145,7 +173,7 @@ pub const Command = struct {
         while (!link.ready) {
             try link.pump(&app, 100);
             if (link.client == null or @import("link.zig").nowMs() > deadline)
-                return .{ .failure = .{ .code = "unavailable", .message = "the venom daemon did not answer" } };
+                return .{ .failure = .{ .code = "unavailable.not_running", .message = "the venom daemon did not answer" } };
         }
         if (ctx.params.object.get("agent")) |v| if (v == .string) {
             if (!try agentExists(&link, &app, v.string)) return .{ .failure = .{ .code = "not_found.agent", .message = "no such agent; see venom agent list", .data = try dataAgent(ctx.allocator, v.string) } };
@@ -171,7 +199,8 @@ pub const Command = struct {
         // An agent's pane is never a control pane.
         var host: ?*host_mod.Host = null;
         defer if (host) |h| host_mod.destroy(self.gpa, h);
-        if (!solo and !settings) switch (try self.chrome(&link, &app, ctx, inbox, usage, bound)) {
+        var handoff: Handoff = .{ .link = &link, .app = &app };
+        if (!solo and !settings) switch (try self.chrome(&link, &app, ctx, inbox, usage, bound, &handoff)) {
             .own => |why| if (why) |text| app.say("{s}", .{text}),
             .host => |h| {
                 host = h;
@@ -205,7 +234,7 @@ pub const Command = struct {
     }
 
     /// `ui.chrome` from the daemon's config, then what it means here.
-    fn chrome(self: *Command, link: *Link, app: *App, ctx: cli.Local.Context, inbox: bool, usage: bool, bound: bool) !host_mod.Resolved {
+    fn chrome(self: *Command, link: *Link, app: *App, ctx: cli.Local.Context, inbox: bool, usage: bool, bound: bool, handoff: *Handoff) !host_mod.Resolved {
         const environ = ctx.path.environ orelse return .{ .own = null };
         const setting = try chromeSetting(link, app);
         const a = ctx.allocator;
@@ -222,6 +251,7 @@ pub const Command = struct {
             .cols = size.cols,
             .rows = size.rows,
             .bound = bound,
+            .handoff = handoff.hook(),
         });
     }
 
@@ -281,7 +311,7 @@ pub const Command = struct {
         var in_buf: [4096]u8 = undefined;
         var in_len: usize = 0;
         var cursor_input = false;
-        while (!app.quit) {
+        while (!(app.quit and app.confirmQuit())) {
             if (self.stopped) |s| if (s.load(.monotonic)) break;
             app.now_ms = wallMs(self.io);
             app.syncLeader();
@@ -367,6 +397,7 @@ fn chromeSetting(link: *Link, app: *App) !host_mod.Setting {
         const rid = r.id orelse continue;
         if (!rid.eql(.{ .integer = 3 })) {
             if (rid.eql(.{ .integer = 1 }) and r.body == .item) try app.onEvent(r.body.item);
+            if (rid.eql(.{ .integer = @import("link.zig").hold_id }) and r.body == .item) app.onHold(r.body.item);
             continue;
         }
         return if (r.body == .ok) host_mod.settingOf(r.body.ok) else .auto;
@@ -382,13 +413,41 @@ fn selfExe(a: std.mem.Allocator) ![]const u8 {
     return a.dupe(u8, buf[0..@intCast(n)]);
 }
 
+/// The outside process of host mode keeps its hold until the control pane
+/// holds too (an item with `others` above 0), bounded by the binding wait,
+/// before it becomes `venomx attach`; the linger covers the rest.
+const Handoff = struct {
+    link: *Link,
+    app: *App,
+    fn hook(self: *Handoff) host_mod.Handoff {
+        return .{ .ctx = self, .wait = wait };
+    }
+    fn wait(ctx: *anyopaque) void {
+        const self: *Handoff = @ptrCast(@alignCast(ctx));
+        const until = @import("link.zig").nowMs() + 5000;
+        while (@import("link.zig").nowMs() < until) {
+            if (self.app.hold) |h| if (h.others > 0) return;
+            self.link.pump(self.app, 50) catch return;
+        }
+    }
+};
+
+/// The selected socket, made absolute: the daemon gets it as `--socket`.
+fn absoluteSocket(a: std.mem.Allocator, path: @import("proto").SocketOptions) ![]const u8 {
+    const selected = try @import("proto").os.socketPath(a, "venom", path);
+    if (std.fs.path.isAbsolute(selected)) return selected;
+    var buf: [std.fs.max_path_bytes]u8 = undefined;
+    const cwd = std.c.getcwd(&buf, buf.len) orelse return selected;
+    return std.fs.path.join(a, &.{ std.mem.span(@as([*:0]const u8, @ptrCast(cwd))), selected });
+}
+
 /// Why `venom` could not connect. Only no socket means no daemon.
 fn connectFailure(ctx: cli.Local.Context, err: anyerror) !cli.Local.Failure {
     const proto = @import("proto");
     const a = ctx.allocator;
     const socket = try proto.os.socketPath(a, "venom", ctx.path);
     const exists = std.c.access(socket, std.c.F_OK) == 0;
-    if (err == error.NotRunning or !exists) return .{ .code = "unavailable", .message = "the venom daemon is not running; start it with `venom serve`" };
+    if (err == error.NotRunning or !exists) return .{ .code = "unavailable.not_running", .message = @import("startup.zig").not_running_message };
     return .{ .code = "unavailable", .message = try std.fmt.allocPrint(a, "cannot read venom's owner file next to {s} ({s}); fix it, or set VENOM_TOKEN", .{ socket, @errorName(err) }) };
 }
 
@@ -413,6 +472,7 @@ fn agentExists(link: *Link, app: *App, id: []const u8) !bool {
         if (!rid.eql(.{ .integer = 2 })) {
             // An events item that raced ahead: apply it.
             if (rid.eql(.{ .integer = 1 }) and r.body == .item) try app.onEvent(r.body.item);
+            if (rid.eql(.{ .integer = @import("link.zig").hold_id }) and r.body == .item) app.onHold(r.body.item);
             continue;
         }
         return r.body == .ok;

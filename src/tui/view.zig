@@ -50,6 +50,46 @@ pub fn render(app: *App, surface: *Surface) !void {
     surface.setDefaults(.{ .fg = app.chrome.foreground(), .bg = app.chrome.background() });
     try renderViews(app, surface);
     if (app.leader_timer.visible() and surface.height >= 2) try leaderPopup(app, surface);
+    if (app.quit_prompt) try quitOverlay(app, surface);
+}
+
+/// The quit confirmation: what quitting this last TUI stops.
+fn quitOverlay(app: *App, surface: *Surface) !void {
+    const a = app.frame.allocator();
+    const theme = &app.theme;
+    const text = try app.quitPromptText(a);
+    const bw: u16 = @min(surface.width -| 4, 72);
+    if (bw < 12 or surface.height < 6) return;
+    // Word-wrapped into the box.
+    var lines: std.ArrayList([]const u8) = .empty;
+    var rest = text;
+    const room = bw -| 4;
+    while (rest.len > 0) {
+        if (w.text.width(rest) <= room) {
+            try lines.append(a, rest);
+            break;
+        }
+        var cut: usize = 0;
+        var i: usize = 0;
+        while (i < rest.len) : (i += 1) {
+            if (rest[i] == ' ') {
+                if (w.text.width(rest[0..i]) > room) break;
+                cut = i;
+            }
+        }
+        if (cut == 0) cut = @min(rest.len, room);
+        try lines.append(a, rest[0..cut]);
+        rest = std.mem.trimStart(u8, rest[cut..], " ");
+    }
+    const bh: u16 = @intCast(@min(surface.height -| 2, lines.items.len + 4));
+    const region: Region = .{ .x = (surface.width -| bw) / 2, .y = (surface.height -| bh) / 3, .width = bw, .height = bh };
+    const inner = try w.box.draw(surface, region, theme, .{ .title = "Quit venom", .focused = true, .role = .warn, .clear = true });
+    for (lines.items, 0..) |line, i| {
+        const y = inner.y + @as(u16, @intCast(i));
+        if (y + 1 >= inner.y + inner.height) break;
+        _ = try w.text.drawText(surface, inner.x + 1, y, inner.width -| 2, line, .normal, theme, .{ .ellipsis = true });
+    }
+    _ = try w.text.drawText(surface, inner.x + 1, inner.y + inner.height -| 1, inner.width -| 2, "⏎ quit    esc stay", .accent, theme, .{});
 }
 
 /// The leader popup, over everything but the bar, with

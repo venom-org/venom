@@ -156,16 +156,19 @@ pub const Config = struct {
     attention: Attention = .{},
     ui: Ui = .{},
     harness: Harnesses = .{},
+    /// Restart-only: whether a bare `venom` may start a missing daemon, and
+    /// its startup budget.
+    daemon: @import("lifecycle.zig").Settings = .{},
 };
 
 /// `harness.<h>.*` pick the adapters the host registers at start,
 /// so they apply on the next `venom serve`; the other `harness.*` keys apply
 /// live.
-pub const Store = cfg.Store(Config, &.{
+pub const Store = cfg.Store(Config, &([_]cfg.FieldPolicy{
     .{ .key = "harness.claude_code", .restart = true },
     .{ .key = "harness.codex", .restart = true },
     .{ .key = "harness.acp", .restart = true },
-});
+} ++ @import("lifecycle.zig").policies));
 
 /// Rejects values the type alone allows but venom does not, naming the key.
 pub fn validate(value: Config) ?cfg.Validation {
@@ -183,6 +186,7 @@ pub fn validate(value: Config) ?cfg.Validation {
     if (!durationFits(u32, value.harness.shutdown_grace)) return .{ .key = "harness.shutdown_grace" };
     if (!durationFits(u32, value.harness.start_timeout)) return .{ .key = "harness.start_timeout" };
     if (value.harness.body_max == 0) return .{ .key = "harness.body_max" };
+    value.daemon.check() catch return .{ .key = "daemon.startup_timeout_ms" };
     if (value.harness.resume_prompt.len == 0) return .{ .key = "harness.resume_prompt" };
     inline for (@typeInfo(Harness).@"enum".field_names) |name| {
         const e = @field(value.harness, name);

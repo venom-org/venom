@@ -295,6 +295,10 @@ pub const Host = struct {
     /// The id the last finished fork reported, until the next one; gpa-owned.
     fork_detail: ?[]u8 = null,
     shut: bool = false,
+    /// The daemon is stopping: from this reactor turn on, nothing starts (no
+    /// queued agent is dispatched and no harness process is spawned), while
+    /// running turns go on until `shutdown` ends them.
+    halted: bool = false,
     /// Asks whether an agent gives up its concurrency slot for now (an open
     /// `agent.wait`). Null: none does.
     slot_released: ?SlotRelease = null,
@@ -438,7 +442,7 @@ pub const Host = struct {
     /// Starts the oldest waiting agents while slots are free (reactor turn,
     /// and after a restart: the tasks are in the log).
     pub fn dispatchQueued(self: *Host, max: usize) !void {
-        if (self.shut) return;
+        if (self.shut or self.halted) return;
         const state = &self.engine.state;
         var live: usize = 0;
         for (state.agents.keys(), state.agents.values()) |id, *x| live += @intFromBool(self.counts(id, x));
@@ -696,7 +700,7 @@ pub const Host = struct {
     /// harness has answered.
     pub fn runFork(self: *Host, key: []const u8, payload: []const u8) !eventlog.Executor.Outcome {
         // The next daemon runs it again: nothing may start now.
-        if (self.shut) return error.Retry;
+        if (self.shut or self.halted) return error.Retry;
         const P = struct { agent: []const u8, through_turn: ?[]const u8 = null };
         const parsed = try std.json.parseFromSlice(P, self.gpa, payload, .{ .ignore_unknown_fields = true });
         defer parsed.deinit();
@@ -820,7 +824,7 @@ pub const Host = struct {
         };
         const now = supervisor.monotonicMs();
         for (self.bindings.values()) |b| {
-            if (self.shut) break;
+            if (self.shut or self.halted) break;
             if (b.status == .backoff and now >= b.next_ms) {
                 b.restarts += 1;
                 self.spawn(b) catch |err| {
@@ -840,16 +844,20 @@ pub const Host = struct {
         if (self.shut) return;
         self.shut = true;
         const grace = self.options.shutdown_grace_ms;
+        for (self.bindings.values()) |b| b.conv.markShutdown();
         for (self.bindings.values()) |b| if (b.process != null and b.conv.inTurn() and b.descriptor.caps.interrupt) {
             b.adapter.interrupt(&b.conv) catch {};
         };
         var deadline = supervisor.monotonicMs() + grace;
         while (self.anyTurnRunning() and supervisor.monotonicMs() < deadline) try self.poll(10);
+        // The cleanup allowance: SIGTERM, SIGKILL halfway, and every
+        // process reaped by its end.
+        const allowance: i64 = @import("../lifecycle.zig").cleanup_allowance_ms;
         for (self.bindings.values()) |b| {
-            self.terminate(b, "daemon_shutdown");
+            self.terminateWithin(b, "daemon_shutdown", @divTrunc(allowance, 2));
             if (b.status != .stopping) b.status = .idle;
         }
-        deadline = supervisor.monotonicMs() + grace + supervisor.leaders.kill_wait_ms + 1_000;
+        deadline = supervisor.monotonicMs() + allowance;
         while (self.anyProcess() and supervisor.monotonicMs() < deadline) try self.poll(10);
     }
 
@@ -885,7 +893,7 @@ pub const Host = struct {
 
     fn ensureProcess(self: *Host, b: *Binding) !void {
         if (b.process != null) return;
-        if (self.shut) return error.ShuttingDown;
+        if (self.shut or self.halted) return error.ShuttingDown;
         b.failures = 0;
         try self.spawn(b);
     }
@@ -938,11 +946,17 @@ pub const Host = struct {
     }
 
     fn terminate(self: *Host, b: *Binding, detail: []const u8) void {
+        self.terminateWithin(b, detail, self.options.shutdown_grace_ms);
+    }
+
+    /// SIGTERM now, SIGKILL after `kill_after_ms`; a termination already
+    /// under way only gets the earlier deadline.
+    fn terminateWithin(self: *Host, b: *Binding, detail: []const u8, kill_after_ms: i64) void {
         const p = if (b.process) |*p| p else return;
         b.status = .stopping;
         b.stop_detail = detail;
         p.closeInput();
-        _ = self.leaders.terminate(p.leader, .{ .deadline = self.leaders.now() + self.options.shutdown_grace_ms }) catch |err|
+        _ = self.leaders.terminate(p.leader, .{ .deadline = self.leaders.now() + kill_after_ms }) catch |err|
             self.warn("cannot terminate harness", .{ .agent = b.conv.agent, .@"error" = err });
     }
 
