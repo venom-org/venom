@@ -25,6 +25,9 @@ pseudo-terminals. Checks, with real processes and sockets:
  9. `venom serve --lifetime on-demand` with no TUI exits after the 5 s grace.
 10. `config set` of either daemon key reports `restart_required`, a workspace
     file may not set one, and doctor warns while a change is pending.
+11. While another process holds the socket's lock, `venom` waits and launches
+    nothing; once it is free, one daemon starts. Below a process manager's
+    marker the TUI refuses with `denied.startup_context`, naming the marker.
 
 Exit status 0 when it passed. Every wait is bounded.
 """
@@ -285,6 +288,33 @@ class Test:
         until("the daemon to stop", self.gone, 15)
         print("ok: concurrent starts share one daemon")
 
+    def check_held_lock(self):
+        """Another process holds the lock: the TUI waits, launching nothing,
+        then starts one daemon once it is free."""
+        import fcntl
+        expect(self.gone(), "a daemon runs before the test")
+        os.makedirs(self.dir, mode=0o700, exist_ok=True)
+        fd = os.open(self.lock, os.O_RDWR | os.O_CREAT, 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            t = self.tui()
+            time.sleep(2)
+            t.drain()
+            serves = [p for p in os.listdir("/proc") if p.isdigit() and self.is_serve(int(p))]
+            expect(not serves, "a daemon started while another process held the lock")
+            expect(t.proc.poll() is None, "venom gave up while the lock was held: %r" % t.out)
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        finally:
+            os.close(fd)
+        self.ready(t)
+        until("the daemon", self.daemon_pid)
+        self.clients(1)
+        serves = [p for p in os.listdir("/proc") if p.isdigit() and self.is_serve(int(p))]
+        expect(len(serves) == 1, "%d daemons after the lock was freed" % len(serves))
+        t.quit()
+        until("the daemon to stop", self.gone, 15)
+        print("ok: a held lock: the TUI waits, then starts one daemon")
+
     def is_serve(self, pid):
         try:
             with open("/proc/%d/cmdline" % pid, "rb") as f:
@@ -345,6 +375,19 @@ class Test:
             until("venom to exit", lambda: (t.drain(), t.proc.poll() is not None)[1], 10)
             expect(t.proc.returncode == want, "%s %s exited %s: %r" % (args, extra, t.proc.returncode, t.out))
             t.close()
+        # Below a process manager: this script marked as one, next to the socket.
+        os.makedirs(self.dir, mode=0o700, exist_ok=True)
+        with open("/proc/self/stat") as f:
+            start = f.read().rsplit(")", 1)[1].split()[19]
+        marker = os.path.join(self.dir, "manager-%d-%s" % (os.getpid(), start))
+        open(marker, "w").close()
+        try:
+            t = self.tui()
+            until("venom to exit", lambda: (t.drain(), t.proc.poll() is not None)[1], 10)
+            expect(t.proc.returncode == 4 and os.path.basename(marker) in t.text(), "below a manager: exit %s: %r" % (t.proc.returncode, t.out))
+            t.close()
+        finally:
+            os.remove(marker)
         # With no daemon, config set has nobody to ask: write the file.
         conf = os.path.join(self.env["XDG_CONFIG_HOME"], "venom")
         os.makedirs(conf, exist_ok=True)
@@ -464,6 +507,7 @@ class Test:
             self.check_start_and_linger()
             self.check_two_tuis()
             self.check_concurrent()
+            self.check_held_lock()
             self.check_crash()
             self.check_persistent()
             self.check_grace()

@@ -1038,3 +1038,33 @@ test "a BEL's info attention on the control pane clears when nothing blocks, and
     try f.host.sync(&f.app);
     try testing.expectEqual(@as(usize, 0), (try f.take()).len);
 }
+
+test "quit: a control pane with agent views open still asks, and says detaching keeps the agents" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+    const a = f.arena.allocator();
+    _ = try f.take();
+    try f.host.openAgent("a1");
+    const list = try f.take();
+    try f.reply(list[0], "{\"panes\":[{\"pane\":\"p4\",\"exited\":false,\"tags\":[{\"key\":\"role\",\"value\":\"agent\"},{\"key\":\"group\",\"value\":\"a1\"}]}]}");
+    _ = try f.take();
+    f.app.model.agents.items[1].state = .queued;
+    // The views' holds end with the control pane: four clients, nobody else.
+    f.app.onHold(try std.json.parseFromSliceLeaky(Value, a, "{\"lifetime\":\"on-demand\",\"origin\":\"interactive\",\"phase\":\"active\",\"clients\":4,\"others\":0}", .{}));
+    try testing.expect(f.app.quitNeedsConfirm());
+    const text = try f.app.quitPromptText(a);
+    try testing.expect(std.mem.indexOf(u8, text, "2 agents are running, 1 is queued.") != null);
+    try testing.expect(std.mem.endsWith(u8, text, "Detaching venomx (its leader, then d) keeps the control pane, and so the agents, running."));
+    f.app.quit = true;
+    try testing.expect(!f.app.confirmQuit());
+    try testing.expect(f.app.quit_prompt and !f.app.quit);
+    // esc stays.
+    _ = try f.app.feed("\x1b");
+    try testing.expect(!f.app.quit_prompt and !f.app.quit);
+    // A TUI outside this control pane also holds: quit does not ask.
+    f.app.onHold(try std.json.parseFromSliceLeaky(Value, a, "{\"lifetime\":\"on-demand\",\"origin\":\"interactive\",\"phase\":\"active\",\"clients\":5,\"others\":1}", .{}));
+    try testing.expect(!f.app.quitNeedsConfirm());
+    f.app.quit = true;
+    try testing.expect(f.app.confirmQuit());
+}
