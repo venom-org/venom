@@ -194,30 +194,29 @@ pub fn lockHeld(a: std.mem.Allocator, socket: []const u8) bool {
         if (n <= 0) break;
         len += @intCast(n);
     }
-    return locksHold(buf[0..len], st.ino);
+    return locksHold(buf[0..len], st.dev_major, st.dev_minor, st.ino);
 }
 
-/// Whether a /proc/locks listing has a FLOCK on inode `ino`. A line reads
-/// `1: FLOCK  ADVISORY  WRITE 1234 00:1a:5678 0 EOF`; the device:inode
-/// field is the sixth.
-pub fn locksHold(listing: []const u8, ino: u64) bool {
+/// Whether a /proc/locks listing has a FLOCK on the file `ino` of device
+/// `major`:`minor`. A line reads `1: FLOCK  ADVISORY  WRITE 1234 00:1a:5678 0 EOF`;
+/// the sixth field is the device's major and minor in hex, then the inode in
+/// decimal. A blocked waiter's line (`2: -> FLOCK ...`) holds nothing and is
+/// skipped.
+pub fn locksHold(listing: []const u8, major: u32, minor: u32, ino: u64) bool {
     var lines = std.mem.splitScalar(u8, listing, '\n');
     while (lines.next()) |line| {
         var fields = std.mem.tokenizeAny(u8, line, " \t");
-        var i: usize = 0;
-        var flock = false;
-        while (fields.next()) |f| : (i += 1) {
-            // A blocked waiter's line has `->` after the number.
-            if (std.mem.eql(u8, f, "->")) return false;
-            if (i == 1) flock = std.mem.eql(u8, f, "FLOCK");
-            if (i == 5) {
-                if (!flock) break;
-                const colon = std.mem.lastIndexOfScalar(u8, f, ':') orelse break;
-                const got = std.fmt.parseInt(u64, f[colon + 1 ..], 10) catch break;
-                if (got == ino) return true;
-                break;
-            }
-        }
+        _ = fields.next() orelse continue;
+        if (!std.mem.eql(u8, fields.next() orelse continue, "FLOCK")) continue;
+        var i: usize = 2;
+        while (i < 5) : (i += 1) _ = fields.next() orelse break;
+        const f = fields.next() orelse continue;
+        var parts = std.mem.splitScalar(u8, f, ':');
+        const maj = std.fmt.parseInt(u32, parts.next() orelse continue, 16) catch continue;
+        const min = std.fmt.parseInt(u32, parts.next() orelse continue, 16) catch continue;
+        const got = std.fmt.parseInt(u64, parts.next() orelse continue, 10) catch continue;
+        if (parts.next() != null) continue;
+        if (maj == major and min == minor and got == ino) return true;
     }
     return false;
 }
@@ -277,7 +276,15 @@ pub const Launcher = struct {
     /// Forks the candidate on the absolute `socket`. Every allocation comes
     /// before the fork; the child execs this very binary, never a PATH lookup
     /// or a shell.
+    ///
+    /// One attempt per launcher: on any error the attempt is marked failed,
+    /// so the caller reports it instead of trying again.
     pub fn launch(self: *Launcher, a: std.mem.Allocator, socket: []const u8, environ: std.process.Environ) !void {
+        errdefer {
+            self.launched = true;
+            self.outcome = .failed;
+            if (self.failure.len == 0) self.failure = "the candidate could not be launched";
+        }
         const sock_arg = try std.fmt.allocPrintSentinel(a, "--socket={s}", .{socket}, 0);
         const argv = [_:null]?[*:0]const u8{ "venom", "serve", "--lifetime=on-demand", "--origin=interactive", sock_arg.ptr, "--json" };
         const envp = try childEnv(a, environ);
@@ -306,13 +313,12 @@ pub const Launcher = struct {
         }
         var status: c_int = 0;
         while (c.waitpid(pid, &status, 0) < 0 and c.errno(-1) == .INTR) {}
+        const s: u32 = @bitCast(status);
+        // The errdefer above closes the record pipe on failure; only a
+        // launch that got this far hands it to `record`.
+        if (!c.W.IFEXITED(s) or c.W.EXITSTATUS(s) != 0) return error.StartupFailed;
         self.record = fds[0];
         self.launched = true;
-        const s: u32 = @bitCast(status);
-        if (!c.W.IFEXITED(s) or c.W.EXITSTATUS(s) != 0) {
-            self.outcome = .failed;
-            return error.StartupFailed;
-        }
     }
 
     /// Reads what the candidate wrote. True once it has failed: a candidate
@@ -439,9 +445,42 @@ test "lifecycle: /proc/locks lines" {
         \\2: -> FLOCK  ADVISORY  WRITE 1240 00:1a:9999 0 EOF
         \\
     ;
-    try std.testing.expect(locksHold(listing, 5678));
-    try std.testing.expect(!locksHold(listing, 77));
-    try std.testing.expect(!locksHold(listing, 9999));
+    try std.testing.expect(locksHold(listing, 0, 0x1a, 5678));
+    try std.testing.expect(!locksHold(listing, 0, 0x1a, 77));
+    try std.testing.expect(!locksHold(listing, 0, 0x1a, 9999));
+}
+test "lifecycle: a blocked waiter before the holder does not hide it" {
+    const listing =
+        \\1: POSIX  ADVISORY  WRITE 99 00:1a:77 0 EOF
+        \\1: -> FLOCK  ADVISORY  WRITE 1240 00:1a:5678 0 EOF
+        \\2: FLOCK  ADVISORY  WRITE 1300 103:02:4242 0 EOF
+        \\
+    ;
+    try std.testing.expect(locksHold(listing, 0x103, 2, 4242));
+    // The waiter itself holds nothing.
+    try std.testing.expect(!locksHold(listing, 0, 0x1a, 5678));
+}
+test "lifecycle: the same inode on another device is not the lock" {
+    const listing =
+        \\1: FLOCK  ADVISORY  WRITE 1234 00:1a:5678 0 EOF
+        \\
+    ;
+    try std.testing.expect(!locksHold(listing, 0, 0x1b, 5678));
+    try std.testing.expect(!locksHold(listing, 8, 0x1a, 5678));
+    try std.testing.expect(locksHold(listing, 0, 0x1a, 5678));
+}
+test "lifecycle: a launch that fails is marked as the one failed attempt" {
+    var launcher: Launcher = .{ .gpa = std.testing.allocator };
+    defer launcher.deinit();
+    var none: [0]u8 = .{};
+    var fba = std.heap.FixedBufferAllocator.init(&none);
+    const block = [_:null]?[*:0]const u8{"HOME=/"};
+    const environ: std.process.Environ = .{ .block = .{ .slice = &block } };
+    try std.testing.expectError(error.OutOfMemory, launcher.launch(fba.allocator(), "/tmp/x.sock", environ));
+    try std.testing.expect(launcher.launched);
+    try std.testing.expect(launcher.failed());
+    try std.testing.expect(launcher.failure.len > 0);
+    try std.testing.expectEqual(@as(c.fd_t, -1), launcher.record);
 }
 test "lifecycle: the child environment drops credentials and markers" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);

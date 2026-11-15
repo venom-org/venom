@@ -135,6 +135,8 @@ class Test:
         self.dir = os.path.join(runtime, "venom")
         self.socket = os.path.join(self.dir, "venom.sock")
         self.lock = os.path.join(self.dir, "venom.lock")
+        # The server's owner file: the socket's path with `.owner` for `.sock`.
+        self.owner = os.path.join(self.dir, "venom.owner")
         self.tuis = []
         self.served = []
 
@@ -237,13 +239,14 @@ class Test:
         self.ready(t2)
         self.clients(1)
         expect(self.daemon_pid() == pid, "a restart within the linger started another daemon")
+        expect(os.path.exists(self.owner), "the running daemon has no owner file at " + self.owner)
         # 2. Quit: it stops after the linger, and cleans up.
         quit_at = time.time()
         t2.quit()
         until("the daemon to stop", self.gone, 15)
         took = time.time() - quit_at
         expect(took >= LINGER_S - 0.5, "the daemon stopped after %.1f s, before the linger" % took)
-        expect(not os.path.exists(os.path.join(self.dir, "venom.owner")) or True, "")
+        expect(not os.path.exists(self.owner), "the stopped daemon left its owner file")
         print("ok: start, linger, restart within the linger, stop (%.1f s)" % took)
 
     def descends(self, pid, ancestor):

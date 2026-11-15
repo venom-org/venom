@@ -80,9 +80,12 @@ pub const Holds = struct {
         return n;
     }
 
-    /// Sends an item to every hold whose view changed.
+    /// Sends an item to every hold whose view changed. A hold whose call is
+    /// gone or whose item cannot be sent ends here, and counts as released.
     fn publish(self: *Holds) !void {
         const d = self.dispatcher orelse return;
+        var removed = false;
+        defer if (removed) self.state.released(self.list.items.len, self.now());
         var i: usize = 0;
         while (i < self.list.items.len) {
             const h = &self.list.items[i];
@@ -93,11 +96,13 @@ pub const Holds = struct {
             };
             const c = d.get(h.ticket) orelse {
                 _ = self.list.orderedRemove(i);
+                removed = true;
                 continue;
             };
             c.item(.{ .lifetime = self.state.lifetime.name(), .origin = @tagName(self.state.origin), .phase = self.state.phaseName(), .clients = now_view.clients, .others = now_view.others }) catch |err| {
                 if (err == error.OutOfMemory) return err;
                 _ = self.list.orderedRemove(i);
+                removed = true;
                 continue;
             };
             h.sent = now_view;

@@ -218,6 +218,29 @@ test "holds: a hold within the linger keeps the daemon; a signal ends every hold
     try testing.expectEqual(@as(usize, 0), f.holds.count());
 }
 
+test "holds: the last hold ending on a failed item starts the linger" {
+    var f: Fixture = undefined;
+    try f.init(.on_demand);
+    defer f.deinit();
+    var a = connection(&f, g.owner);
+    defer a.deinit();
+    var b = connection(&f, g.owner);
+    try send(&f, &a, "{\"id\":1,\"verb\":\"tui.hold\"}");
+    try send(&f, &b, "{\"id\":1,\"verb\":\"tui.hold\"}");
+    try testing.expectEqual(@as(usize, 2), f.holds.count());
+    // `a` stops reading: its next item (clients 1 once `b` is gone) fails.
+    a.output_limit = a.output.items.len - a.sent;
+    f.dispatcher.closed(&b);
+    b.deinit();
+    test_now = 1000;
+    try f.front.tick();
+    try testing.expectEqual(@as(usize, 0), f.holds.count());
+    try testing.expectEqual(lifecycle.Phase.lingering, f.holds.state.phase);
+    test_now = 1000 + lifecycle.wait_ms;
+    try f.front.tick();
+    try testing.expect(f.holds.state.stopping());
+}
+
 test "holds: a persistent daemon counts holds and never stops on them" {
     var f: Fixture = undefined;
     try f.init(.persistent);
