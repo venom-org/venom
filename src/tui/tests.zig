@@ -278,6 +278,9 @@ pub const Daemon = struct {
     engine: eventlog.Engine = undefined,
     runner: harnesses.Runner = undefined,
     harness_verbs: harnesses.Verbs = undefined,
+    /// `tui.hold`: the TUI holds on every connect. Persistent here.
+    holds: @import("../holds.zig").Holds = undefined,
+    front: @import("../holds.zig").Front = undefined,
     agents: Agents = undefined,
     workspaces: Workspaces = undefined,
     scoped: scope.Config = undefined,
@@ -338,8 +341,11 @@ pub const Daemon = struct {
         self.ws_remove = self.workspaces.remover();
         self.ws_scan = self.workspaces.scanner();
         self.scoped = .{ .store = &self.store, .engine = &self.engine, .layers = .{ .gpa = ta, .io = testing.io, .user = self.store.path, .events = &self.events } };
+        self.holds = .{ .gpa = ta, .registry = &self.registry };
+        self.holds.ready();
         const handlers = [_]proto.Binding{
             .{ .verb = "events", .handler = proto.VerbHandler.init(&self.events) },
+            .{ .verb = "tui.hold", .handler = proto.VerbHandler.init(&self.holds) },
             .{ .verb = "workspace.add", .handler = proto.VerbHandler.typed(Workspaces.PathParams, &self.ws_add) },
             .{ .verb = "workspace.list", .handler = proto.VerbHandler.init(&self.workspaces) },
             .{ .verb = "workspace.remove", .handler = proto.VerbHandler.typed(Workspaces.PathParams, &self.ws_remove) },
@@ -350,8 +356,11 @@ pub const Daemon = struct {
             .hello = .{ .identity = .{ .name = main.tool, .version = "0.0.0" }, .caps = &.{"cancel"} },
             .path = .{ .socket = self.socket },
             .registry = &self.registry,
-        }, self.dispatcher.handler());
-        self.loop = .{ .gpa = ta, .io = testing.io, .server = &self.server, .dispatcher = &self.dispatcher, .events = &self.events, .config = &self.store, .registry = &self.registry, .logger = &self.logger, .engine = &self.engine, .harnesses = &self.runner, .agents = &self.agents };
+        }, blk: {
+            self.front = .{ .dispatcher = &self.dispatcher, .holds = &self.holds };
+            break :blk self.front.handler();
+        });
+        self.loop = .{ .gpa = ta, .io = testing.io, .server = &self.server, .dispatcher = &self.dispatcher, .events = &self.events, .config = &self.store, .registry = &self.registry, .logger = &self.logger, .engine = &self.engine, .harnesses = &self.runner, .agents = &self.agents, .holds = &self.holds };
         self.thread = try std.Thread.spawn(.{}, serve, .{self});
     }
 
@@ -384,6 +393,7 @@ pub const Daemon = struct {
         self.loop.deinit();
         self.server.deinit();
         self.dispatcher.deinit();
+        self.holds.deinit();
         self.runner.deinit();
         for (self.pids.items) |pid| {
             testing.expect(c.kill(pid, @fromBackingInt(@intCast(0))) != 0) catch @panic("a harness process outlived the daemon");

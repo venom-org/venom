@@ -128,6 +128,7 @@ const Fixture = struct {
             // Plain reads; harness_verbs_tests.zig has them.
             .{ .verb = "harness.list", .handler = proto.VerbHandler.init(&self.stub) },
             .{ .verb = "harness.show", .handler = proto.VerbHandler.init(&self.stub) },
+            .{ .verb = "tui.hold", .handler = proto.VerbHandler.init(&self.stub) },
         } ++ self.agents.bindings() ++ self.usage.bindings() ++ self.context_verbs.bindings() ++ self.inbox.bindings() ++ self.scoped.bindings();
         self.dispatcher = try proto.Dispatcher.init(ta, &model, &bindings, .{}, null);
         errdefer self.dispatcher.deinit();

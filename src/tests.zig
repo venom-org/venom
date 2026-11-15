@@ -129,9 +129,9 @@ const Owner = struct {
     }
 };
 
-fn stubs(stub: *Stub) [30]proto.Binding {
-    var out: [30]proto.Binding = undefined;
-    for (&out, [_][]const u8{ "agent.spawn", "agent.list", "agent.show", "agent.tool", "agent.send", "agent.stop", "agent.archive", "agent.clean", "agent.takeover", "agent.takeback", "agent.wait", "agent.promote", "agent.takeover_split", "agent.takeover_pane", "harness.hook", "harness.permission_prompt", "agent.context", "agent.compact", "agent.fork", "agent.mcp_off", "usage.show", "usage.export", "inbox.list", "inbox.answer", "inbox.snooze", "inbox.batch", "always.list", "always.revoke", "harness.list", "harness.show" }) |*b, verb| b.* = .{ .verb = verb, .handler = proto.VerbHandler.init(stub) };
+fn stubs(stub: *Stub) [31]proto.Binding {
+    var out: [31]proto.Binding = undefined;
+    for (&out, [_][]const u8{ "agent.spawn", "agent.list", "agent.show", "agent.tool", "agent.send", "agent.stop", "agent.archive", "agent.clean", "agent.takeover", "agent.takeback", "agent.wait", "agent.promote", "agent.takeover_split", "agent.takeover_pane", "harness.hook", "harness.permission_prompt", "agent.context", "agent.compact", "agent.fork", "agent.mcp_off", "usage.show", "usage.export", "inbox.list", "inbox.answer", "inbox.snooze", "inbox.batch", "always.list", "always.revoke", "harness.list", "harness.show", "tui.hold" }) |*b, verb| b.* = .{ .verb = verb, .handler = proto.VerbHandler.init(stub) };
     return out;
 }
 

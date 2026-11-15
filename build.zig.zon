@@ -5,8 +5,8 @@
     .minimum_zig_version = "0.17.1",
     .dependencies = .{
         .venom_std = .{
-            .url = "git+https://github.com/venom-org/venom-std#347de9c057c04e1afce962a53ee663e92b064eae",
-            .hash = "venom_std-0.0.0-sfz3uq4LEABFCW5IOWmdJV867RXhkf0NZp_WQNVwPiLQ",
+            .url = "git+https://github.com/venom-org/venom-std#587b3dd80ca6b210c6c76478e199c0fc39924ef9",
+            .hash = "venom_std-0.0.0-sfz3urUdEADMjHFODhRApgNAhyL6wo0YBlofvGkKWaJs",
         },
         .venom_term = .{
             .url = "git+https://github.com/venom-org/venom-term#acddc3c9226dec545eb3b2667dbb128005adfce6",

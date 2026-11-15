@@ -1021,7 +1021,12 @@ pub const Start = struct {
     rows: u16 = 24,
     /// This process waited for its binding and got it (`awaitBinding`).
     bound: bool = false,
+    /// Run once the control pane exists, before this process becomes
+    /// `venomx attach`: it waits until the control pane holds the daemon.
+    handoff: ?Handoff = null,
 };
+
+pub const Handoff = struct { ctx: *anyopaque, wait: *const fn (*anyopaque) void };
 
 pub const Resolved = union(enum) {
     /// Own mode; a reason worth showing, if any.
@@ -1046,6 +1051,7 @@ pub fn resolve(gpa: std.mem.Allocator, a: std.mem.Allocator, s: Start) !Resolved
         if (err == error.OutOfMemory) return err;
         return .{ .own = try std.fmt.allocPrint(a, "no control pane in venomx ({s}); running on our own", .{if (failed.len > 0) failed else @errorName(err)}) };
     };
+    if (s.handoff) |h| h.wait(h.ctx);
     execAttach(a, attach, session, s.environ) catch {};
     return .{ .own = "could not attach to venomx; running on our own" };
 }
@@ -1348,7 +1354,7 @@ pub fn diffCommand(gpa: std.mem.Allocator, a: std.mem.Allocator, path: proto.Soc
         }
         return "no such pane";
     };
-    var venom = proto.Client.init(gpa, .{ .tool = "venom", .path = path, .hello = hello }) catch return "the venom daemon is not running; start it with `venom serve`";
+    var venom = proto.Client.init(gpa, .{ .tool = "venom", .path = path, .hello = hello }) catch return @import("startup.zig").not_running_message;
     defer venom.deinit();
     const until = nowMs() + 2000;
     while (!(venom.pollHello(100) catch return "the venom daemon did not answer")) {
@@ -1388,7 +1394,7 @@ pub fn splitCommand(gpa: std.mem.Allocator, a: std.mem.Allocator, path: proto.So
         }
     }.of;
     const source = o.pane orelse environ.getPosix("VENOMX_PANE") orelse return failure("invalid_params.pane", "give --pane, or run it inside a venomx pane");
-    var venom = proto.Client.init(gpa, .{ .tool = "venom", .path = path, .hello = hello }) catch return failure("unavailable", "the venom daemon is not running; start it with `venom serve`");
+    var venom = proto.Client.init(gpa, .{ .tool = "venom", .path = path, .hello = hello }) catch return failure("unavailable.not_running", @import("startup.zig").not_running_message);
     defer venom.deinit();
     const until = nowMs() + 2000;
     while (!(venom.pollHello(100) catch return failure("unavailable", "the venom daemon did not answer"))) {

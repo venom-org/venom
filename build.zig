@@ -93,6 +93,21 @@ pub fn build(b: *std.Build) void {
     b.step("test-orphan-reap", "Run a double-forked orphan against a real venom serve").dependOn(&orphan_reap.step);
     test_step.dependOn(&orphan_reap.step);
 
+    // A bare `venom` on pseudo-terminals: the on-demand daemon it starts,
+    // the linger, races, a crash, refusals, and a clean stop of a running
+    // agent, with throwaway daemons.
+    const on_demand = b.addSystemCommand(&.{ "python3", "-I" });
+    on_demand.addFileArg(b.path("scripts/on_demand_test.py"));
+    on_demand.addArg("--venom");
+    on_demand.addArtifactArg(exe);
+    on_demand.addArg("--fakes");
+    on_demand.addDirectoryArg(b.path("src/testdata/harness-bin"));
+    on_demand.addFileInput(b.path("src/testdata/fake_mcp_harness.py"));
+    on_demand.has_side_effects = true;
+    on_demand.expectExitCode(0);
+    b.step("test-on-demand", "Run the on-demand daemon's lifetime against real TUIs and daemons").dependOn(&on_demand.step);
+    test_step.dependOn(&on_demand.step);
+
     // `ui.chrome` end to end. Needs a built `../venomx`, which venom
     // does not depend on to build, so it is not part of `zig build test`.
     const host_demo = b.addSystemCommand(&.{ "python3", "scripts/host_demo.py", "--venom" });

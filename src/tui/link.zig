@@ -6,6 +6,11 @@
 //! cursor, which after a daemon restart (a new epoch) falls back to a
 //! `source_changed` snapshot, so nothing is lost.
 //!
+//! Every connection holds the daemon first (`tui.hold`), reconnects
+//! included: an on-demand daemon counts its TUIs by those holds, so one that
+//! someone else started after a crash still counts this TUI. A reconnect
+//! never starts a daemon.
+//!
 //! Single-threaded and non-blocking: `pump` does one turn of work.
 const std = @import("std");
 const proto = @import("proto");
@@ -13,6 +18,8 @@ const App = @import("app.zig").App;
 
 /// The `events` subscription's request id; the App's ids start above it.
 const events_id: i64 = 1;
+/// The `tui.hold` stream's request id (2 and 3 are the start-up questions).
+pub const hold_id: i64 = 5;
 const backoff_min_ms = 100;
 const backoff_max_ms = 1000;
 
@@ -112,6 +119,7 @@ pub const Link = struct {
             self.ready = true;
             self.connects += 1;
             self.backoff_ms = backoff_min_ms;
+            try c.request(hold_id, "tui.hold", struct {}{});
             try self.subscribe(app);
             try app.onConnected();
         }
@@ -134,8 +142,12 @@ pub const Link = struct {
                 .integer => |v| v,
                 else => continue,
             };
-            if (n != events_id) self.response_bytes += msg.ndjson.len;
-            if (n == events_id) {
+            if (n != events_id and n != hold_id) self.response_bytes += msg.ndjson.len;
+            if (n == hold_id) {
+                // A refusal (a view that only reads) or the daemon stopping:
+                // nothing to hold until the next connect.
+                if (r.body == .item) app.onHold(r.body.item);
+            } else if (n == events_id) {
                 switch (r.body) {
                     .item => |item| try app.onEvent(item),
                     // A cursor the daemon cannot resume from, or a gap:

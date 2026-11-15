@@ -19,6 +19,8 @@ const tui = @import("tui/root.zig");
 const escalation = @import("escalation.zig");
 const permission_server = @import("permission_server.zig");
 const agent_hook = @import("agent_hook.zig");
+const lifecycle = @import("lifecycle.zig");
+const Holds = @import("holds.zig").Holds;
 
 pub const tool = "venom";
 
@@ -32,7 +34,25 @@ const manifest = .{ .format = input.format, .tool = input.tool, .summary = input
 /// `agent view` (bare `venom`) is the TUI, a local command;
 /// `agent permission-server` is Claude Code's permission prompt server;
 /// `agent hook` is what its hooks run while handed over.
-pub const App = cli.WithBootstrap(scope.extend(cfg.merge(cli.manifest.normalize(manifest))), cli.manifest.examples(manifest), .{ .local = tui.local_commands ++ permission_server.local_commands ++ agent_hook.local_commands });
+pub const App = cli.WithBootstrap(scope.extend(cfg.merge(cli.manifest.normalize(manifest))), cli.manifest.examples(manifest), .{ .local = tui.local_commands ++ permission_server.local_commands ++ agent_hook.local_commands, .serve_params = serve_params });
+
+/// What `doctor` says with no daemon: agents never start venom, so the fix
+/// only rechecks, and the message tells a human what to do.
+pub const no_daemon: cli.runtime.NoDaemon = .{ .fix = "venom doctor --json", .message = "No daemon at the selected socket; a human runs `venom` in a terminal outside venomx; agents never start it" };
+
+/// `serve`'s own parameters: who decides the daemon's lifetime. A bare
+/// `venom` starts `serve --lifetime on-demand --origin interactive`.
+pub const serve_params = .{ .{
+    .name = "lifetime",
+    .summary = "persistent (default) runs until a signal; on-demand stops 5 s after the last venom TUI quits, or 5 s after start if none holds it",
+    .type = .{ .kind = .string, .choices = .{ "persistent", "on-demand" } },
+    .default = "persistent",
+}, .{
+    .name = "origin",
+    .summary = "Who started the daemon, set by the TUI's launcher; shown by doctor and tui.hold, never grants anything",
+    .type = .{ .kind = .string, .choices = .{ "serve", "interactive" } },
+    .default = "serve",
+} };
 
 /// The local commands' handler: the TUI, the permission prompt server and
 /// the hook command.
@@ -77,6 +97,40 @@ const ConfigCheck = struct {
     }
 };
 
+/// Product doctor check: the latched lifetime and origin, the restart-only
+/// startup settings (active against persisted) and the lifetime state.
+pub const LifecycleCheck = struct {
+    holds: *const Holds,
+    config: *ConfigStore,
+    /// The `daemon` settings this daemon started with.
+    active: lifecycle.Settings,
+    pub fn run(self: *LifecycleCheck, r: *cli.doctor.Report) anyerror!void {
+        const fix = try r.command("{s} doctor --json", r.tool);
+        const config_fix = try r.command("{s} config check --json", r.tool);
+        const st = &self.holds.state;
+        try r.add("daemon.lifetime", .ok, if (st.lifetime == .on_demand) try r.print("on-demand (latched from serve --lifetime; stops {d} ms after its last TUI quits)", .{lifecycle.wait_ms}) else "persistent (latched from serve --lifetime; TUIs coming and going never stop it)", fix);
+        try r.add("daemon.origin", .ok, try r.print("origin {s} (serve --origin)", .{@tagName(st.origin)}), fix);
+        const persisted_start = self.config.get(r.arena, "daemon.interactive_start") catch |err| if (err == error.OutOfMemory) return err else "invalid";
+        const persisted_budget = self.config.get(r.arena, "daemon.startup_timeout_ms") catch |err| if (err == error.OutOfMemory) return err else "invalid";
+        const active_start = if (self.active.interactive_start) "true" else "false";
+        const active_budget = try r.print("{d}", .{self.active.startup_timeout_ms});
+        const start_pending = !std.mem.eql(u8, std.mem.trim(u8, persisted_start, " \n"), active_start);
+        try r.add("daemon.interactive_start", if (start_pending) .warn else .ok, try r.print("active {s}; persisted {s}{s}", .{ active_start, persisted_start, if (start_pending) "; restart required to apply" else "" }), config_fix);
+        const budget_pending = !std.mem.eql(u8, std.mem.trim(u8, persisted_budget, " \n"), active_budget);
+        try r.add("daemon.startup_deadline", if (budget_pending) .warn else .ok, try r.print("TUI startup budget {s} ms; persisted {s}{s}", .{ active_budget, persisted_budget, if (budget_pending) "; restart required to apply" else "" }), config_fix);
+        const now = supervisor.monotonicMs();
+        const clients = self.holds.count();
+        const consistent = st.consistent(clients, now);
+        const remaining = st.remainingMs(now);
+        const message = switch (st.phase) {
+            .awaiting_first_client => try r.print("state awaiting_first_client; {d} TUI clients; first-client grace remaining {d} ms", .{ clients, remaining }),
+            .lingering => try r.print("state lingering; {d} TUI clients; linger remaining {d} ms", .{ clients, remaining }),
+            else => try r.print("state {s}; {d} TUI clients", .{ st.phaseName(), clients }),
+        };
+        try r.add("daemon.lifecycle", if (consistent) .ok else .fail, message, fix);
+    }
+};
+
 /// Product doctor check: event log retention and watermarks.
 const EventsCheck = struct {
     events: *proto.events.Log,
@@ -94,7 +148,11 @@ pub const skill_notes =
     \\ACP agents); it never runs its own agent harness. Words: a workspace is a
     \\folder added to venom, holding 0..n repos (git roots found inside it); an
     \\agent is one run of a harness on a task, with turns; venom gives each agent
-    \\its own worktree per repo. Start the daemon with `venom serve`. Every verb
+    \\its own worktree per repo. Agents, hooks and MCP never start venom: with no
+    \\daemon running every call returns `unavailable.not_running`, and only a
+    \\human starts it, by running `venom` in a terminal outside venomx. A daemon
+    \\started that way is on-demand: it stops, and with it every running turn,
+    \\your own included, shortly after the human quits the last venom TUI. Every verb
     \\is read-only unless a grant allows more; use named flags and `--json`.
     \\Add a folder with `venom workspace add --path=<abs>`; venom finds its repos
     \\(git roots, up to 4 levels down) and `venom workspace scan` finds them
@@ -203,6 +261,8 @@ pub const ServeLoop = struct {
     /// `notify.post` for blocking items left unanswered; null in
     /// tests that have no venomx to talk to.
     escalation: ?*escalation.Escalation = null,
+    /// The TUI holds and the daemon's lifetime. Null: always persistent.
+    holds: ?*Holds = null,
     /// The combined poll set, reused across turns.
     fds: std.ArrayList(std.c.pollfd) = .empty,
 
@@ -211,12 +271,44 @@ pub const ServeLoop = struct {
     }
 
     pub fn run(self: *ServeLoop, stop: *const supervisor.Stop) anyerror!void {
-        while (!stop.requested()) try self.step(100);
+        // Initialization is complete: the first-client grace of an
+        // on-demand daemon starts here.
+        if (self.holds) |h| h.ready();
+        while (!stop.requested() and !self.stopping()) try self.step(100);
+        // On this thread: the harness processes it started get a
+        // parent-death signal when it ends, so they are stopped cleanly first.
+        try self.shutdown();
+    }
+
+    /// The clean shutdown, however the daemon got to stopping. Idempotent.
+    /// A signal stops an on-demand daemon too: holds end with
+    /// `unavailable.shutdown`, nothing starts from here on, connections are
+    /// no longer accepted (a TUI starting meanwhile finds the lock held and
+    /// waits), then running turns are interrupted and every harness reaped.
+    fn shutdown(self: *ServeLoop) !void {
+        if (self.holds) |h| try h.stop();
+        self.harnesses.host.halted = true;
+        self.dispatcher.cancelAll();
+        self.server.shutdown();
+        self.harnesses.host.shutdown() catch |err| {
+            if (err == error.OutOfMemory) return err;
+            self.logger.warn("harness shutdown failed", .{ .@"error" = err });
+        };
+        try self.events.tick();
+    }
+
+    /// The lifetime ended (the linger or the first-client grace ran out).
+    pub fn stopping(self: *const ServeLoop) bool {
+        const h = self.holds orelse return false;
+        return h.state.stopping();
     }
 
     /// One reactor turn; waits at most `timeout_ms`.
     pub fn step(self: *ServeLoop, timeout_ms: i32) !void {
         try self.wait(timeout_ms);
+        // Stopping committed in this turn: nothing more starts. The
+        // shutdown in `serve` does the rest.
+        if (self.stopping()) return;
         try self.harnesses.host.tick();
         // `harness.list|show` waiting for a discovery run.
         try self.harnesses.discovery.tick();
@@ -286,15 +378,12 @@ pub const ServeLoop = struct {
             var sup = supervisor.Supervisor.init(self.gpa, .{ .status_path = status_path, .logger = self.logger, .reap_orphans = true });
             defer sup.deinit();
             try sup.addThread("serve", supervisor.Task.init(self), .{});
-            sup.run(stopped, .{});
+            // The serve thread's own shutdown takes a harness grace and the
+            // cleanup allowance.
+            sup.run(stopped, .{ .grace_ms = self.harnesses.host.options.shutdown_grace_ms + lifecycle.cleanup_allowance_ms + 1000 });
         }
-        self.dispatcher.cancelAll();
-        self.harnesses.host.shutdown() catch |err| {
-            if (err == error.OutOfMemory) return err;
-            self.logger.warn("harness shutdown failed", .{ .@"error" = err });
-        };
-        try self.events.tick();
-        self.server.shutdown();
+        // Done on the serve thread unless it failed.
+        try self.shutdown();
         while (self.server.connections.items.len != 0) try self.server.poll(100);
     }
 };
@@ -305,8 +394,10 @@ const Daemon = struct {
     environ: std.process.Environ,
     stderr: *std.Io.Writer,
     stopped: *const std.atomic.Value(bool),
-    pub fn serve(self: *Daemon, path: proto.SocketOptions) anyerror!void {
+    pub fn serve(self: *Daemon, path: proto.SocketOptions, params: std.json.Value) anyerror!void {
         harness.process.ignoreSigpipe();
+        const lifetime = lifecycle.Lifetime.parse(if (params.object.get("lifetime")) |v| v.string else "persistent");
+        const origin = lifecycle.Origin.parse(if (params.object.get("origin")) |v| v.string else "serve");
         // Records go to $XDG_STATE_HOME/venom/venom/venom.log; stderr only
         // shows warnings and errors unless the `log` config says otherwise.
         var logger = log.Logger.init(.{ .source = tool, .stderr = self.stderr, .file = self.openLog() });
@@ -326,6 +417,9 @@ const Daemon = struct {
         logger.setConfig(config.current().log);
         var registry = try proto.grants.Registry.init(self.gpa, tool, config.current().grants);
         defer registry.deinit();
+        // The TUI holds, and the lifetime they drive.
+        var holds: Holds = .{ .gpa = self.gpa, .registry = &registry, .state = .{ .lifetime = lifetime, .origin = origin } };
+        defer holds.deinit();
 
         // Durable through the event log; usable once `engine` is open.
         var workspaces: Workspaces = .{ .engine = &engine, .io = self.io };
@@ -356,7 +450,8 @@ const Daemon = struct {
         var server_check: cli.doctor.ServerCheck = .{ .server = undefined };
         var leader_check: tui.host.LeaderCheck = .{ .config = &config, .ctx = &self.environ };
         var isolation_check: tui.host.IsolationCheck = .{ .ctx = &self.environ };
-        const checks = [_]cli.doctor.Check{ .init("config", &config_check), .init("keys", &leader_check), .init("venomx", &isolation_check), .init("runtime", &server_check), .init("events", &events_check), .init("workspaces", &workspaces_check), .init("harness", &harness_check), .init("approvals", &approvals_check) };
+        var lifecycle_check: LifecycleCheck = .{ .holds = &holds, .config = &config, .active = config.current().daemon };
+        const checks = [_]cli.doctor.Check{ .init("daemon", &lifecycle_check), .init("config", &config_check), .init("keys", &leader_check), .init("venomx", &isolation_check), .init("runtime", &server_check), .init("events", &events_check), .init("workspaces", &workspaces_check), .init("harness", &harness_check), .init("approvals", &approvals_check) };
         // The schema digest: advertised in hello and compared by doctor.
         const digest = try App.digest(self.gpa);
         var standard: cli.Standard(App) = .init(.{ .notes = skill_notes, .home = self.environ.getPosix("HOME"), .checks = &checks, .schema = &digest });
@@ -370,9 +465,14 @@ const Daemon = struct {
             .{ .verb = "workspace.remove", .handler = proto.VerbHandler.typed(Workspaces.PathParams, &workspace_remove) },
             .{ .verb = "workspace.scan", .handler = proto.VerbHandler.typed(Workspaces.ScanParams, &workspace_scan) },
             .{ .verb = "events", .handler = proto.VerbHandler.init(&events) },
+            .{ .verb = "tui.hold", .handler = proto.VerbHandler.init(&holds) },
         } ++ agents.bindings() ++ usage.bindings() ++ context_verbs.bindings() ++ inbox.bindings() ++ harness_verbs.bindings() ++ scoped_config.bindings() ++ doctor.bindings() ++ standard_bindings[1..3].*;
-        var dispatcher = try proto.Dispatcher.init(self.gpa, &App.schema, &handlers, .{}, null);
+        // While stopping, mutations fail `unavailable.shutdown`.
+        var gated: [handlers.len]@import("holds.zig").Gated = undefined;
+        const gated_handlers = @import("holds.zig").gate(handlers.len, handlers, &holds, &gated);
+        var dispatcher = try proto.Dispatcher.init(self.gpa, &App.schema, &gated_handlers, .{}, null);
         defer dispatcher.deinit();
+        var front: @import("holds.zig").Front = .{ .dispatcher = &dispatcher, .holds = &holds };
         var server = try proto.Server.init(self.gpa, .{
             .hello = .{ .identity = .{ .name = tool, .version = "0.0.0" }, .caps = &.{"cancel"}, .schema = &digest },
             .path = path,
@@ -381,7 +481,7 @@ const Daemon = struct {
             // of an agent lands here, not at pid 1, and other daemons see it
             // is below venom. `ServeLoop.serve`'s supervisor reaps those orphans.
             .subreaper = true,
-        }, dispatcher.handler());
+        }, front.handler());
         defer server.deinit();
         server_check.server = &server;
         // The durable log: rebuilt on start, then the start is logged.
@@ -418,6 +518,13 @@ const Daemon = struct {
         }
         if (runner.codex) |*cx| cx.logger = &logger;
         runner.host.credentials = principals.credentials();
+        // From the turn that commits stopping, nothing starts.
+        holds.on_stopping = .{ .ctx = &runner.host, .run = struct {
+            fn run(ctx: *anyopaque) void {
+                const h: *harness.host.Host = @ptrCast(@alignCast(ctx));
+                h.halted = true;
+            }
+        }.run };
         engine.options.executors = runner.executors();
         // A take-over's venomx pane outlives this daemon.
         // An agent stays handed over unless its pane is known to be gone.
@@ -445,7 +552,7 @@ const Daemon = struct {
         var escalator: escalation.Escalation = undefined;
         try escalator.init(self.gpa, self.environ, &logger);
         defer escalator.deinit();
-        var loop: ServeLoop = .{ .gpa = self.gpa, .io = self.io, .server = &server, .dispatcher = &dispatcher, .events = &events, .config = &config, .registry = &registry, .logger = &logger, .engine = &engine, .harnesses = &runner, .agents = &agents, .escalation = &escalator };
+        var loop: ServeLoop = .{ .gpa = self.gpa, .io = self.io, .server = &server, .dispatcher = &dispatcher, .events = &events, .config = &config, .registry = &registry, .logger = &logger, .engine = &engine, .harnesses = &runner, .agents = &agents, .escalation = &escalator, .holds = &holds };
         defer loop.deinit();
         try loop.serve(self.stopped, status_path);
         logger.info("stopped", .{});
@@ -471,12 +578,15 @@ pub fn main(init: std.process.Init) !void {
         .stdout = &out.interface,
         .stderr = &err.interface,
         .environ = init.minimal.environ,
-        .bootstrap = cli.Bootstrap.init(&daemon),
+        .bootstrap = cli.Bootstrap.initWithParams(&daemon),
         .local = cli.Local.init(&locals),
         .interrupted = stopped,
+        .no_daemon = no_daemon,
     });
-    try out.interface.flush();
-    try err.interface.flush();
+    // An on-demand daemon whose TUI already quit has nobody reading its
+    // termination record: exit at once rather than return the error.
+    out.interface.flush() catch std.process.exit(if (status != 0) status else 1);
+    err.interface.flush() catch {};
     if (status != 0) std.process.exit(status);
 }
 
@@ -521,4 +631,6 @@ test {
     _ = @import("cleanup_tests.zig");
     _ = @import("safe_git.zig");
     _ = @import("safe_git_tests.zig");
+    _ = @import("lifecycle.zig");
+    _ = @import("holds_tests.zig");
 }

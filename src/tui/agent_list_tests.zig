@@ -406,3 +406,32 @@ test "a child's state is never colour alone; unread settled rows are bold" {
     try testing.expect(f.surface.get(4, 14).?.style.bold);
     try testing.expect(!f.surface.get(4, 5).?.style.bold);
 }
+
+test "quit: asks only when it would stop an on-demand daemon's work, naming running and queued apart" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+    const a = f.arena.allocator();
+    const press = struct {
+        fn key(app: *App, bytes: []const u8) !void {
+            _ = try app.feed(bytes);
+        }
+    }.key;
+    // No hold item yet, or a persistent daemon: quit does not ask.
+    try std.testing.expect(!f.app.quitNeedsConfirm());
+    f.app.onHold(try std.json.parseFromSliceLeaky(std.json.Value, a, "{\"lifetime\":\"persistent\",\"origin\":\"serve\",\"phase\":\"active\",\"clients\":1,\"others\":0}", .{}));
+    try std.testing.expect(!f.app.quitNeedsConfirm());
+    // Another TUI holds an on-demand daemon: it outlives this quit.
+    f.app.onHold(try std.json.parseFromSliceLeaky(std.json.Value, a, "{\"lifetime\":\"on-demand\",\"origin\":\"interactive\",\"phase\":\"active\",\"clients\":2,\"others\":1}", .{}));
+    try std.testing.expect(!f.app.quitNeedsConfirm());
+    // The last one, with agents running and waiting on the human.
+    f.app.onHold(try std.json.parseFromSliceLeaky(std.json.Value, a, "{\"lifetime\":\"on-demand\",\"origin\":\"interactive\",\"phase\":\"active\",\"clients\":1,\"others\":0}", .{}));
+    try std.testing.expect(f.app.quitNeedsConfirm());
+    try std.testing.expectEqualStrings("Quit venom? 6 agents are running. Quitting stops them; each keeps its work and continues when you send to it again.", try f.app.quitPromptText(a));
+    f.app.quit = true;
+    try std.testing.expect(!f.app.confirmQuit());
+    try std.testing.expect(f.app.quit_prompt and !f.app.quit);
+    // ⏎ quits.
+    try press(&f.app, "\r");
+    try std.testing.expect(f.app.quit and f.app.confirmQuit());
+}

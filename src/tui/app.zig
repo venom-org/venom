@@ -245,6 +245,13 @@ pub const App = struct {
     /// The first row the help shows; `j` and `k` move it.
     help_top: u16 = 0,
     quit: bool = false,
+    /// What the daemon's `tui.hold` item last said; null until one came.
+    hold: ?Hold = null,
+    /// The quit confirmation is open (an on-demand daemon whose last TUI
+    /// this is, with work in progress).
+    quit_prompt: bool = false,
+    /// The human confirmed it: quit now.
+    quit_confirmed: bool = false,
     connected: bool = false,
     /// A one-line message for the status bar (a failed verb, offline).
     message: std.ArrayList(u8) = .empty,
@@ -530,6 +537,80 @@ pub const App = struct {
         if (self.focus.index < fixed_areas) return null;
         const i = self.focus.index - fixed_areas;
         return if (i < self.splits.items.len) i else null;
+    }
+
+    pub const Hold = struct { on_demand: bool, others: i64, lingering: bool };
+
+    /// A `tui.hold` item: the daemon's lifetime and who else holds it.
+    pub fn onHold(self: *App, item: std.json.Value) void {
+        if (item != .object) return;
+        const o = item.object;
+        const lifetime = o.get("lifetime") orelse return;
+        const others = o.get("others") orelse return;
+        const phase = o.get("phase") orelse return;
+        if (lifetime != .string or others != .integer or phase != .string) return;
+        self.hold = .{ .on_demand = std.mem.eql(u8, lifetime.string, "on-demand"), .others = others.integer, .lingering = std.mem.eql(u8, phase.string, "lingering") };
+    }
+
+    /// Whether quitting now needs a confirmation: no other hold would
+    /// survive it on an on-demand daemon, and agents are queued, running or
+    /// waiting on the human, or own mode has a take-over split open.
+    pub fn quitNeedsConfirm(self: *const App) bool {
+        const h = self.hold orelse return false;
+        if (!h.on_demand or h.others > 0) return false;
+        const c = self.quitCounts();
+        return c.running + c.queued > 0 or c.takeovers > 0;
+    }
+
+    const QuitCounts = struct { running: usize, queued: usize, takeovers: usize };
+    fn quitCounts(self: *const App) QuitCounts {
+        var out: QuitCounts = .{ .running = 0, .queued = 0, .takeovers = 0 };
+        for (self.model.agents.items) |ag| switch (ag.state) {
+            .running, .needs_you => out.running += 1,
+            .queued => out.queued += 1,
+            else => {},
+        };
+        if (self.host == null) for (self.splits.items) |sp| {
+            out.takeovers += @intFromBool(sp.kind == .take_over and !sp.exited);
+        };
+        return out;
+    }
+
+    /// The quit confirmation's text, naming running and queued agents apart.
+    pub fn quitPromptText(self: *const App, a: std.mem.Allocator) ![]const u8 {
+        const n = self.quitCounts();
+        var out: std.Io.Writer.Allocating = .init(a);
+        const wr = &out.writer;
+        try wr.writeAll("Quit venom? ");
+        if (n.running > 0 and n.queued > 0) {
+            try wr.print("{d} {s} running, {d} {s} queued. Quitting stops the running {s}; {s} its work and continues when you send to it again. Queued agents wait and start when venom runs again.", .{ n.running, if (n.running == 1) "agent is" else "agents are", n.queued, if (n.queued == 1) "is" else "are", if (n.running == 1) "one" else "ones", if (n.running == 1) "it keeps" else "each keeps" });
+        } else if (n.running > 0) {
+            try wr.print("{d} {s} running. Quitting stops {s}; {s} its work and continues when you send to it again.", .{ n.running, if (n.running == 1) "agent is" else "agents are", if (n.running == 1) "it" else "them", if (n.running == 1) "it keeps" else "each keeps" });
+        } else if (n.queued > 0) {
+            try wr.print("{d} {s} queued. Queued agents wait and start when venom runs again.", .{ n.queued, if (n.queued == 1) "agent is" else "agents are" });
+        }
+        if (n.takeovers > 0) try wr.writeAll(" The take-over split ends with venom; its agent is taken back first.");
+        if (self.host != null) try wr.writeAll(" Detaching venomx (its leader, then d) keeps the control pane, and so the agents, running.");
+        return out.written();
+    }
+
+    /// The loop saw `quit`: ask first when this quit would stop an
+    /// on-demand daemon's work. True when the TUI may quit now.
+    pub fn confirmQuit(self: *App) bool {
+        if (self.quit_confirmed or !self.quitNeedsConfirm()) return true;
+        self.quit = false;
+        self.quit_prompt = true;
+        return false;
+    }
+
+    fn quitPromptKey(self: *App, key: term.Input.Key) void {
+        const k = term.widgets.keys;
+        if (!k.pressed(key)) return;
+        if (k.named(key, .enter)) {
+            self.quit_prompt = false;
+            self.quit_confirmed = true;
+            self.quit = true;
+        } else if (k.named(key, .escape)) self.quit_prompt = false;
     }
 
     pub fn say(self: *App, comptime fmt: []const u8, args: anytype) void {
@@ -1145,6 +1226,7 @@ pub const App = struct {
         // for long.
         if (key.action != .release) if (self.host) |h| if (h.notice() != null) self.message.clearRetainingCapacity();
         if (self.pasting) return self.pastedKey(key);
+        if (self.quit_prompt) return self.quitPromptKey(key);
         if (!try self.leaderKey(key)) try self.routeKey(key);
         // `--solo` has no list to land on: past it, in the way Tab was going.
         if (self.solo and self.area() == .list) self.focus.set(@backingInt(if (key.mods.shift) Area.input else Area.transcript));

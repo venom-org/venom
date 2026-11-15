@@ -679,6 +679,8 @@ pub const Sink = struct {
 /// rules every adapter shares: tool calls still open when a turn ends are
 /// closed as `interrupted` first.
 pub const Conversation = struct {
+    /// The daemon's clean shutdown interrupts this conversation's turn.
+    shutting_down: bool = false,
     gpa: std.mem.Allocator,
     /// Strings that live as long as the binding.
     life: std.heap.ArenaAllocator,
@@ -930,12 +932,21 @@ pub const Conversation = struct {
 
     /// The idle boundary. Open tool calls are closed as `interrupted` first;
     /// the decider closes pending requests (`by: turn_end`).
+    /// Set by the host's clean shutdown: an interrupted turn ends with
+    /// detail `daemon_shutdown`.
+    pub fn markShutdown(self: *Conversation) void {
+        self.shutting_down = true;
+    }
+
     pub fn turnEnded(self: *Conversation, reason: []const u8, error_code: ?[]const u8) !void {
         return self.turnEnd(.{ .reason = reason, .error_code = error_code });
     }
 
     /// `turnEnded` with the `resets_at` of a `limit`.
-    pub fn turnEnd(self: *Conversation, end: TurnEnd) !void {
+    pub fn turnEnd(self: *Conversation, end_: TurnEnd) !void {
+        var end = end_;
+        // A turn the daemon's shutdown interrupted says so.
+        if (self.shutting_down and end.error_code == null and std.mem.eql(u8, end.reason, "interrupted")) end.error_code = "daemon_shutdown";
         const turn = try self.openTurn();
         for (self.open_calls.items) |*c| if (!c.ended) {
             c.ended = true;
