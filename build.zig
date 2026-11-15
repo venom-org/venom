@@ -48,6 +48,10 @@ pub fn build(b: *std.Build) void {
     // so it never reaches a real claude or codex, installed or not.
     const fakes = b.pathResolve(&.{ b.fmt("{f}", .{b.root}), "src/testdata/harness-bin" });
     conformance.setEnvironmentVariable("PATH", if (b.graph.environ_map.get("PATH")) |path| b.fmt("{s}:{s}", .{ fakes, path }) else fakes);
+    // The suite isolates the XDG directories, not these: run from a venomx
+    // pane, the daemon under test would reach the real venomx (doctor's
+    // venomx.isolation check) and present the pane's credentials.
+    for ([_][]const u8{ "VENOMX_SOCKET", "VENOMX_TOKEN", "VENOMX_PANE", "VENOMX_PRINCIPAL", "VENOM_SOCKET", "VENOM_TOKEN", "VENOM_PRINCIPAL", "VENOM_AGENT" }) |name| conformance.removeEnvironmentVariable(name);
     b.step("test-conformance", "Run the venom-std agent-contract conformance suite against venom").dependOn(&conformance.step);
     test_step.dependOn(&conformance.step);
 
