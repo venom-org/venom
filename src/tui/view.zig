@@ -373,7 +373,7 @@ fn transcript(app: *App, a: std.mem.Allocator, rows: *transcript_mod.View, d: *c
         break :blk if (it.kind == .approval and !it.away and width >= approval_card.min_width) it else null;
     } else null;
     for (d.requests.items) |q| {
-        if (approval != null and std.mem.eql(u8, q.kind, "approval")) continue;
+        if (approval) |it| if (std.mem.eql(u8, q.kind, "approval") and std.mem.eql(u8, q.reason, it.reason)) continue;
         // Its call's row shows it, open.
         const on_row = q.call.len > 0 and for (d.records.items) |*r| {
             if (r.kind == .tool and std.mem.eql(u8, r.tool.call, q.call)) break true;

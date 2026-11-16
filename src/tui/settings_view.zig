@@ -64,7 +64,7 @@ fn nav(app: *App, surface: *Surface, a: std.mem.Allocator, region: Region) !void
         const y = inner.y + @as(u16, @intCast(i));
         const on = i == s.section;
         // The selected section: `grave`, `▌` in the signal, its number
-        // in `bone` and its name in `bone`.
+        // and its name in `bone`.
         const fill = if (on) w.theme.overlay(theme.style(.normal), theme.style(.selection)) else theme.style(.normal);
         const opts: w.text.DrawOptions = .{ .ellipsis = true, .fill = fill, .overlay = if (on) theme.style(.selection) else null };
         try surface.clear(.{ .x = inner.x, .y = y, .width = inner.width, .height = 1 }, fill);
