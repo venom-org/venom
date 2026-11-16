@@ -282,11 +282,11 @@ pub const Codex = struct {
             .params = .{ .clientInfo = .{ .name = "venom", .title = "venom", .version = self.client_version } },
         }, .{});
         var argv: []const []const u8 = self.argv;
-        var env: []const contract.EnvVar = self.env;
+        var env: []const contract.EnvVar = try withHome(a, self.env, params.home);
         if (self.mcp) |m| {
             // Last on the command line, so `extra_args` cannot override them.
             argv = try std.mem.concat(a, []const u8, &.{ self.argv, try mcp.codexOverrides(a, m) });
-            if (m.socket) |path| env = try std.mem.concat(a, contract.EnvVar, &.{ self.env, &.{.{ .name = mcp.socket_env, .value = path }} });
+            if (m.socket) |path| env = try std.mem.concat(a, contract.EnvVar, &.{ env, &.{.{ .name = mcp.socket_env, .value = path }} });
         }
         return .{
             .argv = argv,
@@ -456,7 +456,7 @@ pub const Codex = struct {
         var argv: std.ArrayList([]const u8) = .empty;
         try argv.appendSlice(a, &.{ self.argv[0], "resume", record.harness_session });
         var env: std.ArrayList(contract.EnvVar) = .empty;
-        try env.appendSlice(a, self.env);
+        try env.appendSlice(a, try withHome(a, self.env, record.home));
         if (record.agent.len > 0) try env.append(a, .{ .name = "VENOM_AGENT", .value = record.agent });
         if (record.hooks) {
             const venom = if (self.mcp) |m| m.command else "venom";
@@ -1341,6 +1341,16 @@ fn count(v: Value, key: []const u8) u64 {
 
 comptime {
     @import("iface").assertImplements(contract.Adapter.VTable, Codex);
+}
+
+/// `env` with `CODEX_HOME` set to a provider's `home`, replacing any
+/// `CODEX_HOME` already in it. No `home`: `env` as it is.
+pub fn withHome(a: std.mem.Allocator, env: []const contract.EnvVar, home: ?[]const u8) ![]const contract.EnvVar {
+    const h = home orelse return env;
+    var out: std.ArrayList(contract.EnvVar) = .empty;
+    for (env) |e| if (!std.mem.eql(u8, e.name, "CODEX_HOME")) try out.append(a, e);
+    try out.append(a, .{ .name = "CODEX_HOME", .value = h });
+    return out.items;
 }
 
 test {

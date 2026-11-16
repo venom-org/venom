@@ -46,6 +46,7 @@ const app_mod = @import("app.zig");
 const App = app_mod.App;
 const Area = app_mod.Area;
 const keys = @import("keys.zig");
+const providers_mod = @import("providers.zig");
 const workspaces = @import("workspaces.zig");
 const Workspace = workspaces.Workspace;
 const Body = @import("proto").Response.Body;
@@ -69,7 +70,7 @@ pub const Field = enum {
             .scope => "Scope",
             .repos => "Repos",
             .isolation => "Isolation",
-            .harness => "Harness",
+            .harness => "Provider",
             .mode => "Mode",
             .model => "Model",
             .issue => "Issue",
@@ -104,12 +105,16 @@ pub const Mode = enum {
     ask,
     accept_edits,
     plan,
+    auto,
+    bypass_permissions,
 
     fn label(self: Mode) []const u8 {
         return switch (self) {
             .ask => "Ask",
             .accept_edits => "Accept edits",
             .plan => "Plan",
+            .auto => "Auto",
+            .bypass_permissions => "Bypass",
         };
     }
 };
@@ -141,6 +146,7 @@ pub const Params = struct {
     repos: ?[]const []const u8 = null,
     isolation: ?[]const u8 = null,
     harness: ?[]const u8 = null,
+    provider: ?[]const u8 = null,
     mode: ?[]const u8 = null,
     model: ?[]const u8 = null,
     issue: ?[]const u8 = null,
@@ -154,6 +160,8 @@ pub const Checkout = struct { path: []const u8, branch: ?[]const u8, new_branch:
 /// A `dry_run` answer, as "Will create" needs it.
 pub const Plan = struct {
     harness: []const u8 = "",
+    /// The provider in effect; empty when none.
+    provider: []const u8 = "",
     isolation: []const u8 = "",
     /// The permission mode in effect; empty when the daemon did not say.
     permission_mode: []const u8 = "",
@@ -180,7 +188,7 @@ pub const Plan = struct {
                 .new_branch = nb != null and nb.? == .bool and nb.?.bool,
             });
         };
-        return .{ .harness = try dupe(a, o.get("harness")), .isolation = try dupe(a, o.get("isolation")), .permission_mode = try dupe(a, o.get("permission_mode")), .cwd = try dupe(a, o.get("cwd")), .checkouts = out.items };
+        return .{ .harness = try dupe(a, o.get("harness")), .provider = try dupe(a, o.get("provider")), .isolation = try dupe(a, o.get("isolation")), .permission_mode = try dupe(a, o.get("permission_mode")), .cwd = try dupe(a, o.get("cwd")), .checkouts = out.items };
     }
 
     /// The lines under "Will create", allocated in `a`.
@@ -239,7 +247,9 @@ pub const Dialog = struct {
     repo_cursor: usize = 0,
     /// Null: the folder's `agents.isolation`.
     isolation: ?Isolation = null,
-    /// Empty: the folder's `agents.default`.
+    /// The provider field's choice, as a `choiceKey`: `p:<provider>` or
+    /// `h:<harness>`. Empty: the default (`agents.provider`, else the
+    /// folder's `agents.default`).
     harness: std.ArrayList(u8) = .empty,
     /// Null: the folder's `agents.mode`.
     mode: ?Mode = null,
@@ -360,7 +370,8 @@ pub const Dialog = struct {
             .repos = try self.repos(a, ws),
             // A plain folder has nothing to isolate: it runs in place.
             .isolation = if (self.isolation != null and !isPlain(ws)) @tagName(self.isolation.?) else null,
-            .harness = if (self.harness.items.len > 0) self.harness.items else null,
+            .harness = choiceHarness(self.harness.items),
+            .provider = choiceProvider(self.harness.items),
             .mode = if (self.mode) |m| @tagName(m) else null,
             .model = trimmed(&self.model),
             .issue = trimmed(&self.issue),
@@ -377,6 +388,7 @@ pub const Dialog = struct {
         try out.append(a, try std.fmt.allocPrint(a, "--workspace={s}", .{p.workspace}));
         if (p.repos) |r| try out.append(a, try std.fmt.allocPrint(a, "--repos={f}", .{std.json.fmt(r, .{})}));
         if (p.isolation) |x| try out.append(a, try std.fmt.allocPrint(a, "--isolation={s}", .{x}));
+        if (p.provider) |x| try out.append(a, try std.fmt.allocPrint(a, "--provider={s}", .{x}));
         if (p.harness) |x| try out.append(a, try std.fmt.allocPrint(a, "--harness={s}", .{x}));
         if (p.mode) |x| try out.append(a, try std.fmt.allocPrint(a, "--mode={s}", .{x}));
         if (p.model) |x| try out.append(a, try std.fmt.allocPrint(a, "--model={s}", .{x}));
@@ -401,6 +413,15 @@ pub const Dialog = struct {
         self.shown = .{ .note = note };
     }
 };
+
+/// A provider choice's key: `p:<name>`; a plain harness's: `h:<id>`.
+fn choiceHarness(k: []const u8) ?[]const u8 {
+    return if (std.mem.startsWith(u8, k, "h:")) k[2..] else null;
+}
+
+fn choiceProvider(k: []const u8) ?[]const u8 {
+    return if (std.mem.startsWith(u8, k, "p:")) k[2..] else null;
+}
 
 /// A dry run with no task yet: the task only has to be non-empty for it, and
 /// nothing in "Will create" depends on it.
@@ -533,7 +554,9 @@ pub fn onPreview(app: *App, id: i64, body: Body) !void {
             const plan = try Plan.parse(a, ok);
             d.shown = .{ .plan = plan };
             d.effective_harness.clearRetainingCapacity();
-            try d.effective_harness.appendSlice(d.gpa, plan.harness);
+            if (plan.provider.len > 0) {
+                try d.effective_harness.print(d.gpa, "p:{s}", .{plan.provider});
+            } else try d.effective_harness.print(d.gpa, "h:{s}", .{plan.harness});
             d.effective_isolation = std.meta.stringToEnum(Isolation, plan.isolation);
             d.effective_mode = std.meta.stringToEnum(Mode, plan.permission_mode);
         },
@@ -733,13 +756,13 @@ fn change(app: *App, delta: isize) !void {
             d.isolation = modes[step(@backingInt(cur), modes.len, delta)];
         },
         .harness => {
-            const names = try harnessNames(app);
+            const names = try choiceKeys(app);
             if (names.len == 0) return;
             const cur = if (d.harness.items.len > 0) d.harness.items else d.effective_harness.items;
             const at = for (names, 0..) |n, i| {
-                if (std.mem.eql(u8, n, cur)) break i;
+                if (std.mem.eql(u8, n.key, cur)) break i;
             } else null;
-            const next = if (at) |i| names[step(i, names.len, delta)] else names[0];
+            const next = if (at) |i| names[step(i, names.len, delta)].key else names[0].key;
             const copy = try app.frame.allocator().dupe(u8, next);
             d.harness.clearRetainingCapacity();
             try d.harness.appendSlice(d.gpa, copy);
@@ -770,6 +793,26 @@ fn harnessNames(app: *App) ![]const []const u8 {
     var out: std.ArrayList([]const u8) = .empty;
     try out.appendSlice(a, app.panel.harnesses);
     try out.appendSlice(a, app.extra_harnesses);
+    return out.items;
+}
+
+/// One choice of the provider field.
+const Choice = struct { key: []const u8, label: []const u8 };
+
+/// What the provider field offers: the providers whose harness is enabled,
+/// then each enabled harness on its own (its default login).
+fn choiceKeys(app: *App) ![]const Choice {
+    const a = app.frame.allocator();
+    const harnesses = try harnessNames(app);
+    var out: std.ArrayList(Choice) = .empty;
+    for (app.panel.providers) |p| {
+        const h = providers_mod.harnessName(p.harness);
+        var on = false;
+        for (harnesses) |n| on = on or std.mem.eql(u8, n, h);
+        if (!on) continue;
+        try out.append(a, .{ .key = try std.fmt.allocPrint(a, "p:{s}", .{p.name}), .label = p.name });
+    }
+    for (harnesses) |n| try out.append(a, .{ .key = try std.fmt.allocPrint(a, "h:{s}", .{n}), .label = n });
     return out.items;
 }
 
@@ -913,24 +956,24 @@ pub fn draw(app: *App, surface: *Surface, main: Region) !void {
             },
             .mode => {
                 const cur = shownMode(d);
-                var items: [3]Chip = undefined;
+                var items: [std.enums.values(Mode).len]Chip = undefined;
                 for (std.enums.values(Mode), &items) |m, *c| c.* = .{ .label = m.label(), .on = m == cur };
                 try chips(app, surface, a, vx, y, room, &items, @backingInt(cur), focused, radio);
             },
             .harness => {
                 const cur = if (d.harness.items.len > 0) d.harness.items else d.effective_harness.items;
-                var names: std.ArrayList([]const u8) = .empty;
-                try names.appendSlice(a, try harnessNames(app));
+                var names: std.ArrayList(Choice) = .empty;
+                try names.appendSlice(a, try choiceKeys(app));
                 // The daemon's default, before `harness.list` has answered.
                 var known = false;
-                for (names.items) |n| known = known or std.mem.eql(u8, n, cur);
-                if (!known and cur.len > 0) try names.append(a, cur);
+                for (names.items) |n| known = known or std.mem.eql(u8, n.key, cur);
+                if (!known and cur.len > 2) try names.append(a, .{ .key = cur, .label = cur[2..] });
                 const items = try a.alloc(Chip, names.items.len);
                 var at: usize = 0;
                 for (names.items, items, 0..) |n, *c, i| {
-                    const on = std.mem.eql(u8, n, cur);
+                    const on = std.mem.eql(u8, n.key, cur);
                     if (on) at = i;
-                    c.* = .{ .label = n, .on = on };
+                    c.* = .{ .label = n.label, .on = on };
                 }
                 if (items.len == 0) {
                     _ = try w.text.drawText(surface, vx, y, room, "the folder's default", .muted, theme, .{});

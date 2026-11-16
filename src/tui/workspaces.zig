@@ -30,6 +30,8 @@ const Value = std.json.Value;
 const App = @import("app.zig").App;
 const keys = @import("keys.zig");
 const model = @import("model.zig");
+const config = @import("../config.zig");
+const providers_mod = @import("providers.zig");
 const new_agent = @import("new_agent.zig");
 const Body = @import("proto").Response.Body;
 
@@ -82,11 +84,15 @@ pub const Panel = struct {
     harness_arena: std.heap.ArenaAllocator,
     harnesses: []const []const u8 = &.{},
     harness_inflight: bool = false,
+    /// The providers, from `config.get`, for the new-agent dialog.
+    provider_arena: std.heap.ArenaAllocator,
+    providers: []const config.Provider = &.{},
 
     pub fn init(gpa: std.mem.Allocator) Panel {
         return .{
             .arena = .init(gpa),
             .harness_arena = .init(gpa),
+            .provider_arena = .init(gpa),
             .path_input = .init(gpa, .{ .prompt = "› ", .placeholder = "Folder to add, like ~/venom-org; enter adds it" }),
         };
     }
@@ -94,6 +100,7 @@ pub const Panel = struct {
     pub fn deinit(self: *Panel, gpa: std.mem.Allocator) void {
         self.arena.deinit();
         self.harness_arena.deinit();
+        self.provider_arena.deinit();
         self.path_input.deinit();
         self.goto.deinit(gpa);
         self.* = undefined;
@@ -158,6 +165,17 @@ pub const Panel = struct {
         self.harnesses = names;
     }
 
+    /// Keeps the providers of a `config.get` result (key `providers`).
+    pub fn applyProviders(self: *Panel, gpa: std.mem.Allocator, ok: Value) !void {
+        var next = std.heap.ArenaAllocator.init(gpa);
+        errdefer next.deinit();
+        const content = text(ok, "content") orelse return;
+        const list = providers_mod.parse(next.allocator(), content);
+        self.provider_arena.deinit();
+        self.provider_arena = next;
+        self.providers = list;
+    }
+
     pub fn find(self: *const Panel, path: []const u8) ?*const Workspace {
         for (self.items) |*x| if (std.mem.eql(u8, x.path, path)) return x;
         return null;
@@ -199,6 +217,11 @@ pub fn requestHarnesses(app: *App) !void {
     if (!app.connected or app.panel.harness_inflight) return;
     app.panel.harness_inflight = true;
     try app.request(.harnesses, "harness.list", struct {}{});
+    try app.request(.providers, "config.get", .{ .key = "providers" });
+}
+
+pub fn onProviders(app: *App, body: Body) !void {
+    if (body == .ok) try app.panel.applyProviders(app.gpa, body.ok);
 }
 
 pub fn open(app: *App) !void {

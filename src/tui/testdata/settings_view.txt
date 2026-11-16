@@ -1,26 +1,26 @@
- SETTINGS                  │ 02 AGENTS                                                 │ ~/.config/venom/config.zon               1 unsaved
+ SETTINGS                  │ 03 AGENTS                                                 │ ~/.config/venom/config.zon               1 unsaved
 ───────────────────────────│───────────────────────────────────────────────────────────│────────────────────────────────────────────────────
-  00 General               │    Harness                                 claude_code ▾  │           .mode = .ask,
-  01 Workspaces            │    agents.default · For a new agent when none is named.   │           .isolation = .worktree,
-▌ 02 Agents                │    Permission mode                                 ask ▾  │ -         .max_concurrent = 4,
-  03 Models and limits     │    agents.mode · Ask, accept edits or plan first. Grant…  │ +         .max_concurrent = 6,
-  04 Permissions and gran… │    Isolation                                  worktree ▾  │           .spawn = .{
-  05 Worktrees             │    agents.isolation · A worktree per agent per repo, in…  │               .allow = true,
-  06 Attention             │▌ ● Max concurrent agents                               6  │
-  07 Transcript            │▌   agents.max_concurrent · Extra spawns queue; children…  │ SAME CHANGE FROM A SHELL
-  08 Usage and budgets     │    Allow agents to spawn agents                     [on]  │ venom config set --key=agents.max_concurrent
-  09 Appearance            │    agents.spawn.allow · Through venom's MCP server.       │ --value=6
-  10 Keys                  │    Max tree depth                                      2  │
-  11 Integrations          │    agents.spawn.depth · Below a top-level agent.          │ CHECKS
-  12 Raw config            │    Child agents in the list                       tree ▾  │ ● config valid
-                           │    ui.children · Tree, folded to one line, or hidden.     │
-───────────────────────────│    Archive settled agents after                       3d  │ u undo  ⌃s save and reload
-  SCOPE  user  S           │    agents.archive_after · Archived agents keep transcri…  │
-                           │  ● claude-code  2.4.1 · signed in                         │
-  user → workspace → repo. │    Max plan                                               │
-  The narrower file wins;  │  ▲ codex  0.71.0 · not signed in                          │
-  ● set in this layer.     │    codex login                                            │
+  00 Providers             │    Harness                                 claude_code ▾  │           .mode = .ask,
+  01 General               │    agents.default · For a new agent when neither a harn…  │           .isolation = .worktree,
+  02 Workspaces            │    Permission mode                                 ask ▾  │ -         .max_concurrent = 4,
+▌ 03 Agents                │    agents.mode · Ask, accept edits or plan first. Grant…  │ +         .max_concurrent = 6,
+  04 Models and limits     │    Isolation                                  worktree ▾  │           .spawn = .{
+  05 Permissions and gran… │    agents.isolation · A worktree per agent per repo, in…  │               .allow = true,
+  06 Worktrees             │▌ ● Max concurrent agents                               6  │
+  07 Attention             │▌   agents.max_concurrent · Extra spawns queue; children…  │ SAME CHANGE FROM A SHELL
+  08 Transcript            │    Allow agents to spawn agents                     [on]  │ venom config set --key=agents.max_concurrent
+  09 Usage and budgets     │    agents.spawn.allow · Through venom's MCP server.       │ --value=6
+  10 Appearance            │    Max tree depth                                      2  │
+  11 Keys                  │    agents.spawn.depth · Below a top-level agent.          │ CHECKS
+  12 Integrations          │    Child agents in the list                       tree ▾  │ ● config valid
+  13 Raw config            │    ui.children · Tree, folded to one line, or hidden.     │
+                           │    Archive settled agents after                       3d  │ u undo  ⌃s save and reload
+───────────────────────────│    agents.archive_after · Archived agents keep transcri…  │
+  SCOPE  user  S           │                                                           │
                            │                                                           │
+  user → workspace → repo. │                                                           │
+  The narrower file wins;  │                                                           │
+  ● set in this layer.     │                                                           │
                            │                                                           │
                            │                                                           │
                            │                                                           │

@@ -56,6 +56,9 @@ fn fixture(app: *App, a: std.mem.Allocator) !void {
     try answer(app, a, .harnesses, fixture_harnesses);
     try answer(app, a, .get, fixture_get);
     _ = try t.sent(a, app);
+    // The screen opens on Providers; these tests start one section below,
+    // on General, and move from there.
+    app.settings.section = 1;
 }
 
 fn verbsSent(a: std.mem.Allocator, app: *App) ![]const u8 {
@@ -106,14 +109,14 @@ test "settings screen snapshot matches testdata/settings_view.txt" {
     try testing.expect(std.mem.indexOf(u8, help, "stop the agent's turn") == null);
 }
 
-test "the Agents section shows found, version and sign-in, and the harness's own sign-in command" {
+test "the Integrations section shows found, version and sign-in, and the harness's own sign-in command" {
     var arena = std.heap.ArenaAllocator.init(ta);
     defer arena.deinit();
     const a = arena.allocator();
     var app = App.init(ta);
     defer app.deinit();
     try fixture(&app, a);
-    app.settings.section = settings.agents_section;
+    app.settings.section = settings.integrations_section;
     const rows = try app.settings.rows(a);
     const n = rows.len;
     try testing.expectEqualStrings("claude-code  2.4.1 · signed in", rows[n - 2].info.title);
@@ -121,7 +124,7 @@ test "the Agents section shows found, version and sign-in, and the harness's own
     try testing.expectEqualStrings("codex  0.71.0 · not signed in", rows[n - 1].info.title);
     try testing.expectEqualStrings("codex login", rows[n - 1].info.detail);
     // A line to read: enter and h l on it change nothing.
-    _ = try app.feed("jjl");
+    _ = try app.feed("l");
     for (0..n) |_| _ = try app.feed("j");
     _ = try app.feed("\rhl");
     try testing.expectEqual(@as(usize, 0), app.settings.pending.items.len);
@@ -203,7 +206,7 @@ test "keys build the pending diff and the command; nothing is sent before ⌃s" 
     try answer(&app, a, .set, "{\"changed\":true,\"restart_required\":false}");
     try testing.expectEqualStrings("config.reload ", try verbsSent(a, &app));
     try answer(&app, a, .reload, "{\"changed\":true,\"restart_required\":false}");
-    try testing.expectEqualStrings("config.get ", try verbsSent(a, &app));
+    try testing.expectEqualStrings("provider.list config.get ", try verbsSent(a, &app));
     try testing.expect(!s.applying);
     try testing.expectEqualStrings("saved and reloaded", app.message.items);
 
@@ -486,7 +489,7 @@ test "a partial save reloads what went through and keeps the refusal on screen" 
     try testing.expectEqualStrings("config.reload ", try verbsSent(a, &app));
     try answer(&app, a, .reload, "{\"changed\":true,\"restart_required\":false}");
     try testing.expect(!s.applying);
-    try testing.expectEqualStrings("config.get ", try verbsSent(a, &app));
+    try testing.expectEqualStrings("provider.list config.get ", try verbsSent(a, &app));
     try testing.expectEqualStrings("agents.isolation", s.failure.?.key);
     try testing.expectEqual(@as(usize, 1), s.pending.items.len);
     try testing.expect(std.mem.indexOf(u8, app.message.items, "1 saved before it and reloaded") != null);
@@ -599,17 +602,17 @@ const Case = struct {
 /// Every section with a config key behind it. (Keys is read-only: checked
 /// below. Raw config's cursor is found, not counted.)
 const cases = [_]Case{
-    .{ .section = 0, .key = "log.level", .keys = "\r", .want = ".debug" },
-    .{ .section = 1, .key = "ui.group_by", .keys = "\r", .want = ".workspace" },
-    .{ .section = 2, .key = "agents.max_concurrent", .keys = "jjj\r" ++ clear_line ++ "4\r", .want = "4" },
-    .{ .section = 3, .key = "harness.start_timeout", .keys = "j\r" ++ clear_line ++ "45s\r", .want = "\"45s\"" },
-    .{ .section = 4, .key = "grants.max_token_ttl", .keys = "jjj\r" ++ clear_line ++ "3600\r", .want = "3600" },
-    .{ .section = 5, .key = "agents.isolation", .keys = "\r", .want = ".in_place" },
-    .{ .section = 6, .key = "attention.approval_timeout", .keys = "jj\r" ++ clear_line ++ "10m\r", .want = "\"10m\"" },
-    .{ .section = 7, .key = "ui.transcript.density", .keys = "\r", .want = ".verbose" },
-    .{ .section = 8, .key = "ui.context.warn_at", .keys = "\r" ++ clear_line ++ "90\r", .want = "90" },
-    .{ .section = 9, .key = "ui.chrome", .keys = "\r", .want = ".own" },
-    .{ .section = 11, .key = "harness.codex.enabled", .keys = "jjj\r", .want = "true" },
+    .{ .section = 1, .key = "log.level", .keys = "\r", .want = ".debug" },
+    .{ .section = 2, .key = "ui.group_by", .keys = "\r", .want = ".workspace" },
+    .{ .section = 3, .key = "agents.max_concurrent", .keys = "jjj\r" ++ clear_line ++ "4\r", .want = "4" },
+    .{ .section = 4, .key = "harness.start_timeout", .keys = "j\r" ++ clear_line ++ "45s\r", .want = "\"45s\"" },
+    .{ .section = 5, .key = "grants.max_token_ttl", .keys = "jjj\r" ++ clear_line ++ "3600\r", .want = "3600" },
+    .{ .section = 6, .key = "agents.isolation", .keys = "\r", .want = ".in_place" },
+    .{ .section = 7, .key = "attention.approval_timeout", .keys = "jj\r" ++ clear_line ++ "10m\r", .want = "\"10m\"" },
+    .{ .section = 8, .key = "ui.transcript.density", .keys = "\r", .want = ".verbose" },
+    .{ .section = 9, .key = "ui.context.warn_at", .keys = "\r" ++ clear_line ++ "90\r", .want = "90" },
+    .{ .section = 10, .key = "ui.chrome", .keys = "\r", .want = ".own" },
+    .{ .section = 12, .key = "harness.codex.enabled", .keys = "jjjjj\r", .want = "true" },
 };
 
 const Live = struct {
@@ -725,8 +728,8 @@ test "live: each section round-trips a change through config set; diff and comma
     _ = try app.feed("\r" ++ clear_line ++ "1000\r");
     try live.saveAndCheck("harness.body_max", "1000");
     // A restart-only key says so.
-    try live.gotoSection(11);
-    _ = try app.feed("\r");
+    try live.gotoSection(settings.integrations_section);
+    _ = try app.feed("jj\r");
     try testing.expectEqualStrings("harness.claude_code.enabled", s.pending.items[0].key);
     try live.saveAndCheck("harness.claude_code.enabled", "true");
     try testing.expect(s.restart_required);
@@ -740,7 +743,7 @@ test "live: each section round-trips a change through config set; diff and comma
 
     // The command shown, run as it is through the real CLI, writes what the
     // screen then writes: the same bytes, nothing left to change.
-    try live.gotoSection(6);
+    try live.gotoSection(7);
     _ = try app.feed("j\r" ++ clear_line ++ "5m\r");
     const p = s.pending.items[0];
     const argv = try s.argv(a, .{ .key = try a.dupe(u8, p.key), .value = try a.dupe(u8, p.value) });
@@ -755,11 +758,11 @@ test "live: each section round-trips a change through config set; diff and comma
     // and a value of the wrong type; the file stays as it was.
     const before = try live.read("config.zon");
     const bad = [_]struct { section: usize, keys: []const u8, key: []const u8 }{
-        .{ .section = 2, .keys = "jjj\r" ++ clear_line ++ "0\r", .key = "agents.max_concurrent" },
-        .{ .section = 6, .keys = "j\r" ++ clear_line ++ "5w\r", .key = "attention.notify_after" },
-        .{ .section = 2, .keys = "jjj\r" ++ clear_line ++ "\"six\"\r", .key = "agents.max_concurrent" },
-        .{ .section = 8, .keys = "\r" ++ clear_line ++ "101\r", .key = "ui.context.warn_at" },
-        .{ .section = 2, .keys = "jjj\r" ++ clear_line ++ "1 6\r", .key = "agents.max_concurrent" },
+        .{ .section = 3, .keys = "jjj\r" ++ clear_line ++ "0\r", .key = "agents.max_concurrent" },
+        .{ .section = 7, .keys = "j\r" ++ clear_line ++ "5w\r", .key = "attention.notify_after" },
+        .{ .section = 3, .keys = "jjj\r" ++ clear_line ++ "\"six\"\r", .key = "agents.max_concurrent" },
+        .{ .section = 9, .keys = "\r" ++ clear_line ++ "101\r", .key = "ui.context.warn_at" },
+        .{ .section = 3, .keys = "jjj\r" ++ clear_line ++ "1 6\r", .key = "agents.max_concurrent" },
     };
     for (bad) |case| {
         try live.gotoSection(case.section);
@@ -794,7 +797,7 @@ test "live: the layer picker reads and writes the workspace and repo files" {
     _ = try app.feed("S");
     try testing.expectEqualStrings("workspace", s.currentLayer().name());
     try live.until("the workspace's values", t.Shows{ .text = "● config valid" });
-    try live.gotoSection(2);
+    try live.gotoSection(settings.agents_section);
     _ = try app.feed("j\r");
     try testing.expectEqualStrings(".accept_edits", s.pending.items[0].value);
     try live.saveAndCheck("agents.mode", ".accept_edits");

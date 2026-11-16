@@ -25,6 +25,13 @@ pub const Mode = enum {
     accept_edits,
     /// Plan first; the plan waits for approval before the agent acts.
     plan,
+    /// The harness's own classifier approves routine, low-risk actions;
+    /// risky or hard-to-undo ones still ask (Claude Code's `auto`).
+    auto,
+    /// Everything is approved with no prompts, venom's approvals and scope
+    /// checks included (Claude Code's `bypassPermissions`). Only for
+    /// sandboxed or throwaway environments.
+    bypass_permissions,
 };
 
 /// How an agent's repos are isolated.
@@ -40,8 +47,13 @@ pub const Children = enum { tree, folded, hidden };
 pub const Density = enum { compact, normal, verbose };
 
 pub const Agents = struct {
-    /// Harness for a new agent when none is named.
+    /// Harness for a new agent when none is named and no default
+    /// provider is set.
     default: Harness = .claude_code,
+    /// The default provider (`providers[].name`) for a new agent that names
+    /// neither a provider nor a harness. Null: `default`, with the harness's
+    /// own login, model and mode.
+    provider: ?[]const u8 = null,
     mode: Mode = .ask,
     isolation: Isolation = .worktree,
     /// Live agents at once, children included. At least 1.
@@ -122,6 +134,64 @@ pub const AcpEntry = struct {
     extra_args: []const []const u8 = &.{},
 };
 
+/// A provider: a named instance of a harness with its own login, default
+/// model and default permission mode. Several providers may share a
+/// harness, such as a work and a personal Claude account.
+pub const Provider = struct {
+    /// How agents, the CLI and the TUI name it, such as `work` or
+    /// `Personal Max`: 1 to 64 bytes of text with no control characters and
+    /// no space at either end; unique.
+    name: []const u8 = "",
+    harness: Harness = .claude_code,
+    /// The auth: the harness's config folder (`CLAUDE_CONFIG_DIR` for
+    /// claude-code, `CODEX_HOME` for codex), which holds its login. A
+    /// leading `~/` is the home folder. Null: the harness's default login.
+    /// Sign in once with the harness's own command, e.g.
+    /// `CLAUDE_CONFIG_DIR=~/.claude_personal claude auth login`.
+    home: ?[]const u8 = null,
+    /// The model for its agents when the spawn names none. Null: the
+    /// harness's default.
+    model: ?[]const u8 = null,
+    /// The permission mode for its agents when the spawn names none. Null:
+    /// `agents.mode`.
+    mode: ?Mode = null,
+
+    /// Whether `name` can name a provider.
+    pub fn validName(name: []const u8) bool {
+        if (name.len == 0 or name.len > 64) return false;
+        if (name[0] == ' ' or name[name.len - 1] == ' ') return false;
+        if (!std.unicode.utf8ValidateSlice(name)) return false;
+        for (name) |ch| if (ch < 0x20 or ch == 0x7f) return false;
+        return true;
+    }
+
+    /// The environment variable `home` sets for this provider's harness.
+    pub fn homeEnv(h: Harness) []const u8 {
+        return switch (h) {
+            .claude_code => "CLAUDE_CONFIG_DIR",
+            .codex => "CODEX_HOME",
+        };
+    }
+
+    /// `home` with a leading `~` or `~/` made absolute with `user_home`.
+    /// Null when `home` is null, or relative and cannot be made absolute.
+    pub fn resolvedHome(self: Provider, gpa: std.mem.Allocator, user_home: ?[]const u8) !?[]const u8 {
+        const h = self.home orelse return null;
+        if (std.mem.eql(u8, h, "~") or std.mem.startsWith(u8, h, "~/")) {
+            const base = user_home orelse return null;
+            return try std.fs.path.join(gpa, &.{ base, h[1..] });
+        }
+        if (!std.fs.path.isAbsolute(h)) return null;
+        return h;
+    }
+};
+
+/// The provider named `name` in `list`, or null.
+pub fn findProvider(list: []const Provider, name: []const u8) ?Provider {
+    for (list) |p| if (std.mem.eql(u8, p.name, name)) return p;
+    return null;
+}
+
 /// The harness host's settings.
 pub const Harnesses = struct {
     claude_code: HarnessEntry = .{},
@@ -156,6 +226,9 @@ pub const Config = struct {
     attention: Attention = .{},
     ui: Ui = .{},
     harness: Harnesses = .{},
+    /// Named instances of the harnesses, each with its own login, default
+    /// model and permission mode. `agents.provider` picks the default.
+    providers: []const Provider = &.{},
     /// Restart-only: whether a bare `venom` may start a missing daemon, and
     /// its startup budget.
     daemon: @import("lifecycle.zig").Settings = .{},
@@ -198,6 +271,16 @@ pub fn validate(value: Config) ?cfg.Validation {
     for (acp.extra_args) |arg| if (arg.len == 0) return .{ .key = "harness.acp.extra_args" };
     // Nothing to run otherwise: no ACP agent has a well-known name.
     if (acp.enabled and acp.path == null) return .{ .key = "harness.acp.path" };
+    for (value.providers, 0..) |p, i| {
+        if (!Provider.validName(p.name)) return .{ .key = "providers" };
+        for (value.providers[0..i]) |q| if (std.mem.eql(u8, p.name, q.name)) return .{ .key = "providers" };
+        if (p.home) |h| if (h.len == 0 or !(std.fs.path.isAbsolute(h) or std.mem.eql(u8, h, "~") or std.mem.startsWith(u8, h, "~/"))) return .{ .key = "providers" };
+        if (p.model) |m| if (m.len == 0) return .{ .key = "providers" };
+    }
+    // `agents.provider` naming no provider is not refused: a rename or a
+    // removal can then be saved one key at a time. A spawn falls back to
+    // `agents.default`.
+    if (value.agents.provider) |name| if (name.len == 0) return .{ .key = "agents.provider" };
     return null;
 }
 
@@ -584,4 +667,30 @@ test "harness.* keys: host settings apply live, adapter settings on restart; bad
     _ = try f.store.reload();
     try testing.expectEqual(@as(usize, 0), f.store.current().harness.claude_code.extra_args.len);
     try testing.expectEqualStrings(".{\"--verbose\"}", try f.store.get(f.arena.allocator(), "harness.claude_code.extra_args"));
+}
+
+test "providers: names, config folders and the default provider" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+    try f.apply("providers", ".{ .{ .name = \"work\" }, .{ .name = \"Personal Max\", .harness = .claude_code, .home = \"~/.claude_personal\", .model = \"opus\", .mode = .bypass_permissions }, .{ .name = \"cx\", .harness = .codex, .home = \"/opt/codex-home\" } }");
+    try testing.expectEqual(@as(usize, 3), f.store.current().providers.len);
+    try testing.expectEqual(Mode.bypass_permissions, f.store.current().providers[1].mode.?);
+    // A default that names no provider is kept (a rename can be saved one
+    // key at a time); an empty one is not.
+    try f.apply("agents.provider", "\"gone\"");
+    try f.expectRejected("agents.provider", "\"\"", "agents.provider");
+    try f.expectRejected("providers", ".{ .{ .name = \"\" } }", "providers");
+    try f.expectRejected("providers", ".{ .{ .name = \" work\" } }", "providers");
+    try f.expectRejected("providers", ".{ .{ .name = \"a\" }, .{ .name = \"a\", .harness = .codex } }", "providers");
+    try f.expectRejected("providers", ".{ .{ .name = \"a\", .home = \"relative/dir\" } }", "providers");
+    try f.expectRejected("providers", ".{ .{ .name = \"a\", .model = \"\" } }", "providers");
+
+    var arena = std.heap.ArenaAllocator.init(a);
+    defer arena.deinit();
+    const p: Provider = .{ .name = "x", .home = "~/.claude_personal" };
+    try testing.expectEqualStrings("/home/me/.claude_personal", (try p.resolvedHome(arena.allocator(), "/home/me")).?);
+    try testing.expect((try p.resolvedHome(arena.allocator(), null)) == null);
+    try testing.expectEqualStrings("/abs", (try (Provider{ .name = "x", .home = "/abs" }).resolvedHome(arena.allocator(), null)).?);
+    try testing.expectEqualStrings("CODEX_HOME", Provider.homeEnv(.codex));
 }

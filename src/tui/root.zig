@@ -13,6 +13,8 @@
 //! - inbox_view.zig: the inbox screen (`leader i`, `venom inbox`)
 //! - settings.zig: the settings screen's state and keys
 //! - settings_view.zig: draws it (`leader s`, `venom settings`)
+//! - providers.zig: the `providers` value, parsed and written back, and sign-in commands
+//! - provider_popup.zig: Settings › Providers' popup: a new provider, or changes to one
 //! - usage_view.zig: the usage screen (`leader u`)
 //! - context_panel.zig: the context panel (`leader a c`)
 //! - diff.zig: `git diff` for the pager (`d`)
@@ -65,6 +67,8 @@ test {
     _ = @import("new_agent.zig");
     _ = @import("new_agent_tests.zig");
     _ = @import("settings.zig");
+    _ = @import("providers.zig");
+    _ = @import("provider_popup.zig");
     _ = @import("zon_text.zig");
     _ = @import("settings_tests.zig");
     _ = @import("usage_view_tests.zig");

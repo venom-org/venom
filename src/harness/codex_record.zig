@@ -119,7 +119,7 @@ fn promptOf(a: std.mem.Allocator, item: Value) ![]const u8 {
 fn readThread(cx: *codex.Codex, a: std.mem.Allocator, record: contract.Resume) !Thread {
     var leaders: supervisor.Leaders = .init(cx.gpa, .{});
     defer leaders.deinit();
-    var p = try Process.spawn(cx.gpa, &leaders, .{ .argv = cx.argv, .cwd = record.cwd, .env = cx.env });
+    var p = try Process.spawn(cx.gpa, &leaders, .{ .argv = cx.argv, .cwd = record.cwd, .env = try codex.withHome(a, cx.env, record.home) });
     defer p.deinit();
     // It only read, and nothing of it is wanted any more.
     defer version.stop(&p, &leaders) catch {};

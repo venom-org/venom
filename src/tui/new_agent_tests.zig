@@ -305,7 +305,7 @@ test "dialog: the options are the request; repos are never sent empty" {
     _ = try app.feed("\x1b[200~lh\r\t\x1b[201~");
     try testing.expectEqual(@as(usize, 0), app.outbox.items.len);
     try testing.expect(d.starting == null);
-    try testing.expectEqualStrings("codex", d.harness.items);
+    try testing.expectEqualStrings("h:codex", d.harness.items);
     try testing.expectEqual(new_agent.Field.harness, d.field);
     d.field = .task;
     d.task.clear();
@@ -686,7 +686,7 @@ const Live = struct {
         try testing.expectEqual(new_agent.Shown.failed, std.meta.activeTag(d.shown));
         d.field = .harness;
         _ = try self.app.feed("l");
-        try testing.expectEqualStrings("fake", d.harness.items);
+        try testing.expectEqualStrings("h:fake", d.harness.items);
         try self.until("the fake's preview", Settled{});
         d.field = .task;
         return d;

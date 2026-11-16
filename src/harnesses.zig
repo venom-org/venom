@@ -119,6 +119,8 @@ pub const Runner = struct {
     mcp_arena: ?std.heap.ArenaAllocator = null,
     /// What `doctor` and `harness.list|show` report.
     discovery: Discovery = undefined,
+    /// `provider.list`'s sign-in checks.
+    providers: ProviderList = undefined,
 
     /// Registers the enabled harnesses that have an adapter in this build,
     /// plus `extra` (tests register the fake harness this way). `engine`
@@ -182,6 +184,7 @@ pub const Runner = struct {
         try self.registered.appendSlice(gpa, extra);
         self.host = Host.init(gpa, engine, self.registered.items, hostOptions(settings, logger));
         self.discovery = try .init(gpa, settings, if (self.claude_code) |*cc| cc.exe else null, if (self.codex) |*cx| cx.argv else null);
+        self.providers = .{ .gpa = gpa, .discovery = &self.discovery };
         // In place now: the detectors point into `self`.
         if (self.claude_code) |*cc| cc.startVersionDetect(version_timeout_ms);
         if (self.codex) |*cx| cx.startVersionDetect(version_timeout_ms);
@@ -190,6 +193,7 @@ pub const Runner = struct {
     /// Shuts the host down if `shutdown` did not run, then frees it. No
     /// harness process outlives this.
     pub fn deinit(self: *Runner) void {
+        self.providers.deinit();
         self.discovery.deinit();
         self.host.deinit();
         if (self.claude_code) |*cc| cc.deinit();
@@ -359,7 +363,7 @@ pub const Discovery = struct {
         }
     }
 
-    fn pathEnv(self: *const Discovery) ?[]const u8 {
+    pub fn pathEnv(self: *const Discovery) ?[]const u8 {
         if (self.path_env) |p| return p;
         return if (std.c.getenv("PATH")) |p| std.mem.sliceTo(p, 0) else null;
     }
@@ -560,6 +564,151 @@ pub const Discovery = struct {
     }
 };
 
+/// The sign-in checks behind `provider.list`: one thread per provider runs
+/// its harness's status command with the provider's config folder in the
+/// environment. Calls that arrive during a run share it. Runs on the
+/// reactor, like `Discovery`; `tick` answers.
+pub const ProviderList = struct {
+    gpa: std.mem.Allocator,
+    discovery: *Discovery,
+    run: ?*Run = null,
+    waiting: std.ArrayList(proto.Ticket) = .empty,
+    dispatcher: ?*proto.Dispatcher = null,
+
+    /// One provider in `provider.list`. Absent (null) means not known.
+    pub const Entry = struct {
+        name: []const u8,
+        harness: []const u8,
+        /// The config folder as configured; absent: the default login.
+        home: ?[]const u8 = null,
+        model: ?[]const u8 = null,
+        mode: ?[]const u8 = null,
+        /// It is `agents.provider`.
+        default: bool = false,
+        /// Its harness is enabled (`harness.<h>.enabled`).
+        available: bool = false,
+        signed_in: ?bool = null,
+        /// The plan or sign-in method, never an identity.
+        plan: ?[]const u8 = null,
+        /// Its own sign-in command, for its config folder.
+        sign_in: []const u8,
+    };
+
+    const Run = struct {
+        arena: std.heap.ArenaAllocator,
+        entries: []Entry,
+        /// Resolved config folders, parallel to `entries`.
+        homes: []?[]const u8,
+        threads: []?std.Thread,
+        remaining: std.atomic.Value(usize) = .init(0),
+    };
+
+    pub fn deinit(self: *ProviderList) void {
+        if (self.run) |r| self.finish(r);
+        self.waiting.deinit(self.gpa);
+    }
+
+    fn finish(self: *ProviderList, r: *Run) void {
+        for (r.threads) |t| if (t) |thread| thread.join();
+        r.arena.deinit();
+        self.gpa.destroy(r);
+        self.run = null;
+    }
+
+    pub fn enqueue(self: *ProviderList, c: *proto.Call, list: []const config.Provider, default: ?[]const u8) !void {
+        self.dispatcher = c.dispatcher;
+        try self.waiting.append(self.gpa, c.ticket);
+        if (self.run != null) return;
+        const r = try self.gpa.create(Run);
+        r.* = .{ .arena = .init(self.gpa), .entries = &.{}, .homes = &.{}, .threads = &.{} };
+        self.run = r;
+        errdefer self.finish(r);
+        const a = r.arena.allocator();
+        r.entries = try a.alloc(Entry, list.len);
+        r.homes = try a.alloc(?[]const u8, list.len);
+        r.threads = try a.alloc(?std.Thread, list.len);
+        @memset(r.threads, null);
+        const user_home: ?[]const u8 = if (std.c.getenv("HOME")) |h| std.mem.sliceTo(h, 0) else null;
+        for (list, r.entries, r.homes) |p, *e, *home| {
+            const t = self.target(p.harness);
+            e.* = .{
+                .name = try a.dupe(u8, p.name),
+                .harness = t.known.name,
+                .home = if (p.home) |h| try a.dupe(u8, h) else null,
+                .model = if (p.model) |m| try a.dupe(u8, m) else null,
+                .mode = if (p.mode) |m| @tagName(m) else null,
+                .default = if (default) |d| std.mem.eql(u8, d, p.name) else false,
+                .available = t.enabled,
+                .sign_in = try providerSignIn(a, p, t),
+            };
+            home.* = try p.resolvedHome(a, user_home);
+        }
+        r.remaining.store(list.len, .release);
+        for (r.entries, 0..) |e, i| {
+            if (!e.available) {
+                _ = r.remaining.fetchSub(1, .acq_rel);
+                continue;
+            }
+            r.threads[i] = std.Thread.spawn(.{}, work, .{ self, r, i }) catch blk: {
+                _ = r.remaining.fetchSub(1, .acq_rel);
+                break :blk null;
+            };
+        }
+    }
+
+    fn target(self: *const ProviderList, h: config.Harness) *const Discovery.Target {
+        for (&self.discovery.targets) |*t| if (t.known.id == h) return t;
+        unreachable; // every config.Harness has a `known` entry
+    }
+
+    fn work(self: *ProviderList, r: *Run, i: usize) void {
+        defer _ = r.remaining.fetchSub(1, .acq_rel);
+        const e = &r.entries[i];
+        const t = self.target(for (known) |k| {
+            if (std.mem.eql(u8, k.name, e.harness)) break k.id;
+        } else unreachable);
+        var env_buf: [1]harness.contract.EnvVar = undefined;
+        var env: []const harness.contract.EnvVar = &.{};
+        if (r.homes[i]) |h| {
+            env_buf[0] = .{ .name = config.Provider.homeEnv(t.known.id), .value = h };
+            env = &env_buf;
+        }
+        const got = discovery.signIn(self.gpa, t.vendor, .{
+            .exe = t.exe,
+            .path_env = self.discovery.pathEnv(),
+            .command_timeout_ms = self.discovery.command_timeout_ms,
+            .cancel = &self.discovery.cancel,
+            .env = env,
+        }) catch return;
+        e.signed_in = got.signed_in;
+        e.plan = got.detail;
+    }
+
+    pub fn tick(self: *ProviderList) !void {
+        const r = self.run orelse return;
+        if (r.remaining.load(.acquire) != 0) return;
+        defer self.finish(r);
+        const d = self.dispatcher orelse return;
+        for (r.threads) |*t| if (t.*) |thread| {
+            thread.join();
+            t.* = null;
+        };
+        for (self.waiting.items) |ticket| {
+            const c = d.get(ticket) orelse continue;
+            c.ok(.{ .providers = r.entries }) catch |err| if (err == error.OutOfMemory) return err;
+        }
+        self.waiting.clearRetainingCapacity();
+    }
+};
+
+/// A provider's sign-in command: its harness's own, with the config folder
+/// in front when it has one (`CLAUDE_CONFIG_DIR=~/.claude_personal claude auth login`).
+fn providerSignIn(a: std.mem.Allocator, p: config.Provider, t: *const Discovery.Target) ![]const u8 {
+    const cmd = try ownCommand(a, t.exe, t.vendor.sign_in);
+    const home = p.home orelse return cmd;
+    return std.fmt.allocPrint(a, "{s}={s} {s}", .{ config.Provider.homeEnv(p.harness), home, cmd });
+}
+
 /// `<exe> <args...>`, with `exe` quoted for the shell if it needs it.
 fn ownCommand(a: std.mem.Allocator, exe: []const u8, args: []const []const u8) ![]const u8 {
     var r: cli.doctor.Report = .{ .arena = a, .tool = "" };
@@ -572,15 +721,31 @@ fn ownCommand(a: std.mem.Allocator, exe: []const u8, args: []const []const u8) !
 /// off the reactor, and answer from `Discovery.tick`.
 pub const Verbs = struct {
     runner: *Runner,
+    /// For `provider.list`; without it the list is empty.
+    config: ?*config.Store = null,
     show_: Show = undefined,
+    providers_: Providers = undefined,
 
-    pub fn bindings(self: *Verbs) [2]proto.Binding {
+    pub fn bindings(self: *Verbs) [3]proto.Binding {
         self.show_ = .{ .runner = self.runner };
+        self.providers_ = .{ .runner = self.runner, .config = self.config };
         return .{
             .{ .verb = "harness.list", .handler = proto.VerbHandler.init(self) },
             .{ .verb = "harness.show", .handler = proto.VerbHandler.typed(Show.Params, &self.show_) },
+            .{ .verb = "provider.list", .handler = proto.VerbHandler.init(&self.providers_) },
         };
     }
+
+    /// `provider.list` (read): the providers, each with its harness's
+    /// sign-in state for its own config folder, asked off the reactor.
+    pub const Providers = struct {
+        runner: *Runner,
+        config: ?*config.Store,
+        pub fn call(self: *Providers, c: *proto.Call) anyerror!void {
+            const cur = if (self.config) |st| st.current() else return c.ok(.{ .providers = &[_]u8{} });
+            try self.runner.providers.enqueue(c, cur.providers, cur.agents.provider);
+        }
+    };
 
     pub fn call(self: *Verbs, c: *proto.Call) anyerror!void {
         try self.runner.discovery.enqueue(c, null);

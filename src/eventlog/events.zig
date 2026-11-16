@@ -156,6 +156,13 @@ pub const AgentCreated = struct {
     /// The model asked for at spawn (or inherited). Null: the
     /// harness's default. Internal.
     spawn_model: ?[]const u8 = null,
+    /// The provider it was spawned with (`providers[].name`). Null: none,
+    /// the harness alone.
+    provider: ?[]const u8 = null,
+    /// The provider's config folder for the harness, resolved at spawn, so a
+    /// restart runs with the same login even if the provider changes. Null:
+    /// the harness's default. Internal.
+    home: ?[]const u8 = null,
     /// The grants of the agent's principal, so that a restart restores
     /// exactly these. Null: no principal was issued.
     /// Internal.

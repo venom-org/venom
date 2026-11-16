@@ -312,6 +312,8 @@ pub const ServeLoop = struct {
         try self.harnesses.host.tick();
         // `harness.list|show` waiting for a discovery run.
         try self.harnesses.discovery.tick();
+        // `provider.list` waiting for its sign-in checks.
+        try self.harnesses.providers.tick();
         const now_ms: i64 = @intCast(@divTrunc(std.Io.Timestamp.now(self.io, .awake).nanoseconds, std.time.ns_per_ms));
         self.config.watch(now_ms) catch |err| {
             if (err == error.OutOfMemory) return err;
@@ -441,7 +443,7 @@ const Daemon = struct {
         var usage: Usage = .{ .engine = &engine };
         var context_verbs: ContextVerbs = .{ .agents = &agents };
         var inbox: Inbox = .{ .engine = &engine, .principals = &principals };
-        var harness_verbs: harnesses.Verbs = .{ .runner = &runner };
+        var harness_verbs: harnesses.Verbs = .{ .runner = &runner, .config = &config };
 
         var events_check: EventsCheck = .{ .events = &events, .engine = &engine };
         var config_check: ConfigCheck = .{ .config = &config };
@@ -617,6 +619,7 @@ test {
     _ = @import("tui/root.zig");
     _ = @import("approvals_tests.zig");
     _ = @import("mcp_tests.zig");
+    _ = @import("provider_tests.zig");
     _ = @import("permission_server.zig");
     _ = @import("agent_hook.zig");
     _ = @import("permissions.zig");

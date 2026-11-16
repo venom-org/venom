@@ -17,6 +17,7 @@ const builtin = @import("builtin");
 const supervisor = @import("supervisor");
 const guard = @import("guard.zig");
 const process = @import("process.zig");
+const contract = @import("contract.zig");
 const version = @import("version.zig");
 const Process = process.Process;
 const c = std.c;
@@ -93,6 +94,9 @@ pub const Options = struct {
     command_timeout_ms: u32 = command_timeout_ms,
     budget_ms: u32 = budget_ms,
     cancel: ?*const std.atomic.Value(bool) = null,
+    /// Added to the status command's environment: a provider's config
+    /// folder (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`), so it reports that login.
+    env: []const contract.EnvVar = &.{},
 };
 
 /// Finds `exe` and asks it everything. Strings are in `out`. Blocks, at most
@@ -110,7 +114,7 @@ pub fn discover(gpa: std.mem.Allocator, out: std.mem.Allocator, vendor: Vendor, 
 
     facts.version = try version.detectCancellable(gpa, out, path, left(deadline, o.command_timeout_ms), o.cancel);
 
-    facts.sign_in = try askSignIn(gpa, vendor, path, left(deadline, o.command_timeout_ms), o.cancel);
+    facts.sign_in = try askSignIn(gpa, vendor, path, left(deadline, o.command_timeout_ms), o.cancel, o.env);
 
     const protocol_argv = try std.mem.concat(out, []const u8, &.{ &.{path}, o.protocol_args });
     facts.protocol = try vendor.protocol(gpa, protocol_argv, left(deadline, o.command_timeout_ms), o.cancel);
@@ -126,17 +130,17 @@ pub fn signIn(gpa: std.mem.Allocator, vendor: Vendor, o: Options) !SignIn {
     defer scratch.deinit();
     const path = try resolve(scratch.allocator(), o.exe, o.path_env) orelse return .{};
     if (builtin.is_test and !guard.spawnAllowed(path, guard.optedIn)) return .{};
-    return askSignIn(gpa, vendor, path, o.command_timeout_ms, o.cancel);
+    return askSignIn(gpa, vendor, path, o.command_timeout_ms, o.cancel, o.env);
 }
 
 /// Runs the status command. Its output can name the account, so it lives in
 /// a scratch arena gone by the return; `SignIn` holds static text only.
-fn askSignIn(gpa: std.mem.Allocator, vendor: Vendor, path: []const u8, timeout_ms: u32, cancel: ?*const std.atomic.Value(bool)) !SignIn {
+fn askSignIn(gpa: std.mem.Allocator, vendor: Vendor, path: []const u8, timeout_ms: u32, cancel: ?*const std.atomic.Value(bool), env: []const contract.EnvVar) !SignIn {
     var scratch: std.heap.ArenaAllocator = .init(gpa);
     defer scratch.deinit();
     const a = scratch.allocator();
     const argv = try std.mem.concat(a, []const u8, &.{ &.{path}, vendor.status });
-    const got = (try capture(gpa, a, argv, timeout_ms, cancel)) orelse return .{};
+    const got = (try captureEnv(gpa, a, argv, timeout_ms, cancel, env)) orelse return .{};
     return vendor.parse_status(got);
 }
 
@@ -172,9 +176,13 @@ pub const Output = struct { exit: ?process.Exit = null, stdout: []const u8 = "",
 /// its group, so a child it left behind holding the pipes neither delays the
 /// answer nor outlives it. Null when it cannot be started.
 fn capture(gpa: std.mem.Allocator, out: std.mem.Allocator, argv: []const []const u8, timeout_ms: u32, cancel: ?*const std.atomic.Value(bool)) !?Output {
+    return captureEnv(gpa, out, argv, timeout_ms, cancel, &.{});
+}
+
+fn captureEnv(gpa: std.mem.Allocator, out: std.mem.Allocator, argv: []const []const u8, timeout_ms: u32, cancel: ?*const std.atomic.Value(bool), env: []const contract.EnvVar) !?Output {
     var leaders: supervisor.Leaders = .init(gpa, .{});
     defer leaders.deinit();
-    var p = Process.spawn(gpa, &leaders, .{ .argv = argv }) catch |err| {
+    var p = Process.spawn(gpa, &leaders, .{ .argv = argv, .env = env }) catch |err| {
         if (err == error.OutOfMemory) return err;
         return null;
     };
