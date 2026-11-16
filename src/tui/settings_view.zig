@@ -51,6 +51,7 @@ pub fn render(app: *App, surface: *Surface, main: Region) !void {
     }
     try rows(app, surface, a, center);
     try preview(app, surface, a, preview_region);
+    if (s.popup) |*p| try p.draw(surface, main, &app.crypt, a);
 }
 
 fn nav(app: *App, surface: *Surface, a: std.mem.Allocator, region: Region) !void {
@@ -126,6 +127,15 @@ fn rows(app: *App, surface: *Surface, a: std.mem.Allocator, region: Region) !voi
                 if (info.mark) |m| _ = try w.text.drawText(surface, inner.x + 2, y, 1, if (m == .ok) "●" else "▲", if (m == .ok) .ok else .warn, theme, .{ .overlay = sel });
                 _ = try w.text.drawText(surface, inner.x + 4, y, inner.width -| 5, info.title, if (on) .normal else .secondary, theme, .{ .ellipsis = true, .overlay = sel, .fill = fill });
                 if (inner.height > y - inner.y + 1) _ = try w.text.drawText(surface, inner.x + 4, y + 1, inner.width -| 5, info.detail, .muted, theme, .{ .ellipsis = true, .overlay = sel, .fill = fill });
+            },
+            .provider => |r| {
+                const new = r.index == null;
+                if (r.mark) |m| _ = try w.text.drawText(surface, inner.x + 2, y, 1, if (m == .ok) "●" else "▲", if (m == .ok) .ok else .warn, theme, .{ .overlay = sel });
+                const vw: u16 = @min(@as(u16, @intCast(@min(w.text.width(r.status), 200))), inner.width / 2);
+                const bold: ?term.Style = w.theme.overlay(sel orelse .{}, .{ .bold = true });
+                _ = try w.text.drawText(surface, inner.x + 4, y, inner.width -| (vw + 7), r.title, if (new) .accent else .normal, theme, .{ .ellipsis = true, .overlay = bold });
+                if (r.status.len > 0) _ = try w.text.drawText(surface, inner.x + inner.width -| (vw + 2), y, vw, r.status, if (r.mark == .ok) .secondary else .warn, theme, .{ .ellipsis = true, .overlay = sel });
+                if (inner.height > y - inner.y + 1) _ = try w.text.drawText(surface, inner.x + 4, y + 1, inner.width -| 6, r.detail, .muted, theme, .{ .ellipsis = true, .overlay = sel, .fill = fill });
             },
             .field => |f| {
                 const editable = s.editable(f.key);
@@ -281,6 +291,7 @@ fn cutAt(text: []const u8, width: u16) usize {
 }
 
 pub fn hint(app: *const App) []const u8 {
+    if (app.settings.popup != null) return "⇥ ↑↓ field  h l choose  ⏎ save  esc cancel";
     if (app.settings.editing != null) return "⏎ keep  esc cancel";
     return "j k move  ⇥ next pane  ⏎ edit  h l step  S layer  u undo  ⌃s save  esc back  ? keys";
 }

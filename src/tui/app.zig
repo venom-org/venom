@@ -126,6 +126,8 @@ pub const Purpose = union(enum) {
     workspaces,
     /// `harness.list`, for the new-agent dialog.
     harnesses,
+    /// `config.get` of `providers`, for the new-agent dialog.
+    providers,
     /// `workspace.add` from the panel.
     workspace_add,
     /// `workspace.scan` from the panel.
@@ -491,7 +493,7 @@ pub const App = struct {
                 self.gpa.free(v.label);
                 self.gpa.free(v.keys);
             },
-            .list, .show, .inbox, .tool, .config, .workspaces, .harnesses, .workspace_add, .workspace_scan, .preview, .spawn, .settings, .stop_tree, .usage, .context => {},
+            .list, .show, .inbox, .tool, .config, .workspaces, .harnesses, .providers, .workspace_add, .workspace_scan, .preview, .spawn, .settings, .stop_tree, .usage, .context => {},
         };
         self.pending.clearRetainingCapacity();
     }
@@ -548,7 +550,9 @@ pub const App = struct {
             .main => {},
             .inbox, .usage => return .normal,
             .workspaces => return if (self.panel.adding) .input else .normal,
-            .settings => return if (self.settings.editing != null) .input else .normal,
+            // The prompt and the provider popup take typed text, the
+            // leader key included.
+            .settings => return if (self.settings.editing != null or self.settings.popup != null) .input else .normal,
         }
         if (self.focusedSplit()) |i| if (self.splits.items[i].shell != null or self.splits.items[i].exited) return .terminal;
         return if (self.inFocusedBox()) .input else .normal;
@@ -1022,6 +1026,7 @@ pub const App = struct {
             },
             .workspaces => try workspaces.onList(self, body),
             .harnesses => try workspaces.onHarnesses(self, body),
+            .providers => try workspaces.onProviders(self, body),
             .workspace_add => try workspaces.onAdded(self, body),
             .workspace_scan => try workspaces.onScanned(self, body),
             .preview => try new_agent.onPreview(self, id, body),

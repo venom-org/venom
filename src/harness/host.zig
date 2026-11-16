@@ -578,7 +578,7 @@ pub const Host = struct {
         }
         // Nothing restarts it while the harness's TUI has the conversation.
         b.status = .idle;
-        return b.adapter.resumeCommand(a, .{ .agent = agent, .hooks = hooks, .harness = b.conv.harness, .harness_session = session, .fork_source = st.fork_source, .cwd = b.conv.cwd, .last_turn = b.conv.last_turn, .transcript_ref = st.transcript_ref });
+        return b.adapter.resumeCommand(a, .{ .agent = agent, .hooks = hooks, .harness = b.conv.harness, .harness_session = session, .fork_source = st.fork_source, .cwd = b.conv.cwd, .last_turn = b.conv.last_turn, .transcript_ref = st.transcript_ref, .home = st.home });
     }
 
     /// Waits for `b`'s process to exit (a release), terminating it after
@@ -911,6 +911,7 @@ pub const Host = struct {
             .transcript_ref = st.transcript_ref,
             .model = st.spawn_model,
             .permission_mode = permissionMode(st.mode, b.descriptor.caps.permission_modes),
+            .home = st.home,
             .writable = try eventlog.agent_scope.writableOf(sa, st),
             .read_only = try eventlog.agent_scope.readOnlyOf(sa, &self.engine.state, st),
             .mcp_off = st.mcp_off,
@@ -1324,7 +1325,7 @@ pub const Host = struct {
         if (b.descriptor.caps.catch_up != .none and !b.conv.inTurn() and b.process == null) if (b.conv.harness_session) |session| {
             // The imported turns are logged through the conversation's sink,
             // with venom's ids, like turns the protocol process ran.
-            _ = b.adapter.catchUp(&b.conv, .{ .harness = b.conv.harness, .harness_session = session, .fork_source = self.engine.state.agents.getPtr(id).?.fork_source, .cwd = b.conv.cwd, .last_turn = lastTurn(self.engine.state.agents.getPtr(id).?), .harness_last_turn = lastHarnessTurn(self.engine.state.agents.getPtr(id).?), .transcript_ref = self.engine.state.agents.getPtr(id).?.transcript_ref, .since_ms = parsed.value.since }) catch |err| {
+            _ = b.adapter.catchUp(&b.conv, .{ .harness = b.conv.harness, .harness_session = session, .fork_source = self.engine.state.agents.getPtr(id).?.fork_source, .cwd = b.conv.cwd, .last_turn = lastTurn(self.engine.state.agents.getPtr(id).?), .harness_last_turn = lastHarnessTurn(self.engine.state.agents.getPtr(id).?), .transcript_ref = self.engine.state.agents.getPtr(id).?.transcript_ref, .since_ms = parsed.value.since, .home = self.engine.state.agents.getPtr(id).?.home }) catch |err| {
                 // An unstarted fork whose take-over never made the copy has
                 // nothing to import, and that is not a failure.
                 // `fork_source` stays: the next start makes the copy.

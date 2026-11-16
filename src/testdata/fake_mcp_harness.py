@@ -40,7 +40,8 @@ tool result (one JSON line) to FILE.
   answers, then the command item and `turn/completed`. It appends
   `{"approval": <venom's response>}` to FILE.
 
-It records its argv and the environment variable names it was given in
+It records its argv, the environment variable names it was given and the
+values of CLAUDE_CONFIG_DIR and CODEX_HOME in
 FILE.argv.json, so tests can check that no token is in argv.
 """
 import json, os, re, signal, subprocess, sys, time
@@ -61,7 +62,9 @@ def opt(name):
 mode = opt("--fake-mode")
 out = opt("--fake-out")
 with open(out + ".argv.json", "w") as f:
-    json.dump({"argv": args, "env": sorted(os.environ)}, f)
+    # Names only, but the config folders' values too: they hold no secret.
+    homes = {k: os.environ[k] for k in ("CLAUDE_CONFIG_DIR", "CODEX_HOME") if k in os.environ}
+    json.dump({"argv": args, "env": sorted(os.environ), "homes": homes}, f)
 
 
 def server_claude(name="venom"):

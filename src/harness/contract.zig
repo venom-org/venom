@@ -210,6 +210,10 @@ pub const Start = struct {
     transcript_ref: ?[]const u8 = null,
     model: ?[]const u8 = null,
     permission_mode: ?[]const u8 = null,
+    /// The provider's config folder for the harness (Claude Code's
+    /// `CLAUDE_CONFIG_DIR`, Codex's `CODEX_HOME`): the login and settings the
+    /// agent runs with. Absolute. Null: the adapter's own default.
+    home: ?[]const u8 = null,
     /// The agent's scope: the folders it may write
     /// (absolute; its repos, or the workspace root for a whole-workspace
     /// scope) and the workspace's repos outside the scope, which are
@@ -227,6 +231,8 @@ pub fn modeName(mode: []const u8) ?[]const u8 {
     if (std.mem.eql(u8, mode, "ask")) return "manual";
     if (std.mem.eql(u8, mode, "accept_edits")) return "acceptEdits";
     if (std.mem.eql(u8, mode, "plan")) return "plan";
+    if (std.mem.eql(u8, mode, "auto")) return "auto";
+    if (std.mem.eql(u8, mode, "bypass_permissions")) return "bypassPermissions";
     return null;
 }
 
@@ -288,6 +294,8 @@ pub const Resume = struct {
     /// When venom handed the conversation over (ms since the Unix epoch):
     /// `catch_up` imports what the harness recorded from then on.
     since_ms: ?i64 = null,
+    /// The agent's provider config folder, as in `Start.home`.
+    home: ?[]const u8 = null,
 };
 
 /// An answer to a request: `answer` is `allow_once`,

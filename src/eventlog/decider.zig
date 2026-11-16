@@ -122,6 +122,10 @@ pub const Agent = struct {
     mode: ?[]const u8 = null,
     /// The model asked for at spawn; null: the harness's default.
     spawn_model: ?[]const u8 = null,
+    /// The provider it was spawned with; null: none.
+    provider: ?[]const u8 = null,
+    /// The provider's config folder for the harness; null: its default.
+    home: ?[]const u8 = null,
     /// The grants its principal is issued with.
     grants: ?[]const @import("proto").grants.Grant = null,
     /// Its principal was revoked: a restart must not issue it again.
@@ -519,6 +523,8 @@ fn forkEnded(state: *const State, effect: *const Effect, c: anytype, now: i64, a
             .state = if (p.task == null) .settled else .queued,
             .mode = source.mode,
             .spawn_model = source.spawn_model orelse source.model,
+            .provider = source.provider,
+            .home = source.home,
             .grants = grants,
             .at = now,
         },
@@ -847,7 +853,7 @@ pub fn evolve(state: *State, event: Event) error{OutOfMemory}!void {
         .agent_created => {
             const c = (try event.dupe(a)).agent_created;
             const agent = try getOrPutAgent(state, c.agent);
-            agent.* = .{ .title = c.title, .harness = c.harness, .workspace = c.workspace, .repos = c.repos, .parent = c.parent, .issue = c.issue, .harness_session = c.harness_session, .fork_source = c.fork_source, .cwd = c.cwd, .worktrees = c.worktrees, .borrowed = c.borrowed, .task = c.task, .mode = c.mode, .spawn_model = c.spawn_model, .grants = c.grants, .state = c.state, .created_at = c.at, .changed_at = c.at };
+            agent.* = .{ .title = c.title, .harness = c.harness, .workspace = c.workspace, .repos = c.repos, .parent = c.parent, .issue = c.issue, .harness_session = c.harness_session, .fork_source = c.fork_source, .cwd = c.cwd, .worktrees = c.worktrees, .borrowed = c.borrowed, .task = c.task, .mode = c.mode, .spawn_model = c.spawn_model, .provider = c.provider, .home = c.home, .grants = c.grants, .state = c.state, .created_at = c.at, .changed_at = c.at };
         },
         .agent_dispatched => |d| if (state.agents.getPtr(d.agent)) |agent| {
             agent.dispatched = true;

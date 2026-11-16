@@ -47,7 +47,8 @@
 //! an isolated parent is `denied.spawn_isolation`), and its parent's scope
 //! (when it names none), harness, model, permission mode and grants, never
 //! more: `denied.delegation`, `denied.spawn_model`, `denied.spawn_mode`
-//! (`accept_edits` is wider than `ask`, which is wider than `plan`).
+//! (`bypass_permissions` is wider than `auto`, then `accept_edits`, then
+//! `ask`, then `plan`).
 //! `agents.spawn.allow` (`denied.spawn_disabled`) and `agents.spawn.depth`
 //! (`denied.spawn_depth`; the top-level agent is depth 1) limit the tree.
 //! `stop --tree` stops an agent and everything below it, parents first so
@@ -513,6 +514,8 @@ fn modeWidth(m: config.Mode) u8 {
         .plan => 0,
         .ask => 1,
         .accept_edits => 2,
+        .auto => 3,
+        .bypass_permissions => 4,
     };
 }
 
@@ -577,7 +580,7 @@ fn notSignedIn(c: *proto.Call, asked: *harnesses.Discovery, target: usize) !void
 /// tell, the spawn goes on and the harness reports its own failure.
 pub const Spawn = struct {
     agents: *Agents,
-    pub const Params = struct { task: []const u8, cwd: ?[]const u8 = null, workspace: ?[]const u8 = null, repos: ?[]const []const u8 = null, harness: ?[]const u8 = null, mode: ?[]const u8 = null, model: ?[]const u8 = null, title: ?[]const u8 = null, grants: ?[]const proto.grants.Grant = null, isolation: ?[]const u8 = null, issue: ?[]const u8 = null, branch: ?[]const u8 = null, dry_run: bool = false };
+    pub const Params = struct { task: []const u8, cwd: ?[]const u8 = null, workspace: ?[]const u8 = null, repos: ?[]const []const u8 = null, harness: ?[]const u8 = null, provider: ?[]const u8 = null, mode: ?[]const u8 = null, model: ?[]const u8 = null, title: ?[]const u8 = null, grants: ?[]const proto.grants.Grant = null, isolation: ?[]const u8 = null, issue: ?[]const u8 = null, branch: ?[]const u8 = null, dry_run: bool = false };
 
     pub fn call(self: *Spawn, c: *proto.Call, p: Params) anyerror!void {
         return self.run(c, p, null);
@@ -637,14 +640,47 @@ pub const Spawn = struct {
             if (!try withinSpawnLimits(ag, c, defaults, parent.?, &x, depthOf(ag.state(), &x) + 1)) return;
             if (!try withinScope(a, &x, workspace, resolved.repos)) return c.fail("denied.spawn_scope", "a sub-agent's scope must stay within its parent's", .{ .param = "repos", .parent = parent.? });
         }
-        const harness_name = p.harness orelse if (parent_agent) |x| x.harness else defaults.harness;
+        // The provider: named, else the parent's (when no harness is named),
+        // else `agents.provider` (when no harness is named either).
+        const providers = ag.config.current().providers;
+        var provider: ?config.Provider = null;
+        var home: ?[]const u8 = null;
+        if (p.provider) |name| {
+            provider = config.findProvider(providers, name) orelse return c.fail("not_found.provider", "no provider has this name; see providers in config", .{ .param = "provider", .provider = name });
+        } else if (p.harness == null) {
+            if (parent_agent) |x| {
+                if (x.provider) |name| if (config.findProvider(providers, name)) |found| {
+                    provider = found;
+                };
+            } else if (ag.config.current().agents.provider) |name| {
+                // A default that names no provider (renamed or removed) falls
+                // back to `agents.default`.
+                provider = config.findProvider(providers, name);
+            }
+        }
+        var provider_harness: ?[]const u8 = null;
+        if (provider) |pv| {
+            for (harnesses.known) |k| if (k.id == pv.harness) {
+                provider_harness = k.name;
+            };
+            if (p.harness) |h| if (!std.mem.eql(u8, h, provider_harness.?))
+                return c.fail("invalid_params.provider", "the harness is not the provider's", .{ .param = "harness", .provider = pv.name, .harness = h });
+            const user_home: ?[]const u8 = if (std.c.getenv("HOME")) |h| std.mem.sliceTo(h, 0) else null;
+            home = try pv.resolvedHome(a, user_home);
+            if (pv.home != null and home == null) return c.fail("invalid_params.provider", "the provider's config folder cannot be resolved", .{ .param = "provider", .provider = pv.name });
+        }
+        // A sub-agent of the same harness with no provider of its own keeps its parent's login.
+        if (provider == null and p.provider == null) if (parent_agent) |x| {
+            if (p.harness == null or std.mem.eql(u8, p.harness.?, x.harness)) home = x.home;
+        };
+        const harness_name = p.harness orelse provider_harness orelse if (parent_agent) |x| x.harness else defaults.harness;
         if (!ag.registered(harness_name))
             return c.fail("unavailable.harness_not_found", "no adapter for this harness in this build, or it is disabled", .{ .param = "harness", .harness = harness_name });
 
         // A child's mode and model: its parent's, never more.
         const requested_mode: ?config.Mode = if (p.mode) |m| std.meta.stringToEnum(config.Mode, m).? else null;
-        var mode_name: []const u8 = @tagName(requested_mode orelse defaults.mode);
-        var model = p.model;
+        var mode_name: []const u8 = @tagName(requested_mode orelse (if (provider) |pv| pv.mode else null) orelse defaults.mode);
+        var model = p.model orelse if (provider) |pv| pv.model else null;
         if (parent_agent) |x| {
             const inherited = if (x.mode) |m| std.meta.stringToEnum(config.Mode, m) orelse .ask else config.Mode.ask;
             if (requested_mode) |m| if (modeWidth(m) > modeWidth(inherited)) return c.fail("denied.spawn_mode", "the mode is wider than the parent's", .{ .param = "mode", .parent_mode = @tagName(inherited) });
@@ -659,7 +695,9 @@ pub const Spawn = struct {
         }
 
         // Off the reactor: held here, and `Agents.tick` comes back (above).
-        if (ag.discovery) |asked| if (asked.signInTarget(harness_name)) |target| if (checked != target) {
+        // The check asks the harness's default login; a provider with a
+        // config folder of its own reports its own failure instead.
+        if (home == null) if (ag.discovery) |asked| if (asked.signInTarget(harness_name)) |target| if (checked != target) {
             try ag.held_spawns.append(ag.engine.gpa, .{ .ticket = c.ticket, .params = p, .target = target });
             ag.dispatcher = c.dispatcher;
             asked.askSignIn(target);
@@ -684,7 +722,8 @@ pub const Spawn = struct {
             n.* = x.name;
             o.* = .{ .repo = x.repo, .path = x.path, .branch = x.branch, .new_branch = x.new_branch };
         }
-        if (p.dry_run) return c.ok(.{ .agent = id, .state = "queued", .harness = harness_name, .title = title, .workspace = workspace, .repos = resolved.repos, .cwd = run_cwd, .worktrees = names, .isolation = @tagName(mode), .checkouts = checkouts, .parent = parent, .permission_mode = mode_name, .model = model, .dry_run = true });
+        const provider_name: ?[]const u8 = if (provider) |pv| pv.name else if (p.harness == null and p.provider == null) (if (parent_agent) |x| x.provider else null) else null;
+        if (p.dry_run) return c.ok(.{ .agent = id, .state = "queued", .harness = harness_name, .title = title, .workspace = workspace, .repos = resolved.repos, .cwd = run_cwd, .worktrees = names, .isolation = @tagName(mode), .checkouts = checkouts, .parent = parent, .permission_mode = mode_name, .model = model, .provider = provider_name, .dry_run = true });
 
         var issued_grants: ?[]const proto.grants.Grant = null;
         if (ag.principals) |pr| {
@@ -714,6 +753,8 @@ pub const Spawn = struct {
             .task = p.task,
             .mode = mode_name,
             .spawn_model = model,
+            .provider = provider_name,
+            .home = home,
             .grants = issued_grants,
         } }) catch |err| {
             if (ag.principals) |pr| pr.forget(id);
@@ -728,7 +769,7 @@ pub const Spawn = struct {
             return hostFailure(c, err, id, ag.get(id));
         };
         const x = ag.get(id).?;
-        try c.ok(.{ .agent = id, .state = @tagName(x.state), .harness = harness_name, .title = title, .workspace = workspace, .repos = resolved.repos, .cwd = run_cwd, .worktrees = names, .isolation = @tagName(mode), .checkouts = checkouts, .parent = parent, .permission_mode = mode_name, .model = model });
+        try c.ok(.{ .agent = id, .state = @tagName(x.state), .harness = harness_name, .title = title, .workspace = workspace, .repos = resolved.repos, .cwd = run_cwd, .worktrees = names, .isolation = @tagName(mode), .checkouts = checkouts, .parent = parent, .permission_mode = mode_name, .model = model, .provider = provider_name });
     }
 };
 

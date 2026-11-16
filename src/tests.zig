@@ -129,9 +129,9 @@ const Owner = struct {
     }
 };
 
-fn stubs(stub: *Stub) [31]proto.Binding {
-    var out: [31]proto.Binding = undefined;
-    for (&out, [_][]const u8{ "agent.spawn", "agent.list", "agent.show", "agent.tool", "agent.send", "agent.stop", "agent.archive", "agent.clean", "agent.takeover", "agent.takeback", "agent.wait", "agent.promote", "agent.takeover_split", "agent.takeover_pane", "harness.hook", "harness.permission_prompt", "agent.context", "agent.compact", "agent.fork", "agent.mcp_off", "usage.show", "usage.export", "inbox.list", "inbox.answer", "inbox.snooze", "inbox.batch", "always.list", "always.revoke", "harness.list", "harness.show", "tui.hold" }) |*b, verb| b.* = .{ .verb = verb, .handler = proto.VerbHandler.init(stub) };
+fn stubs(stub: *Stub) [32]proto.Binding {
+    var out: [32]proto.Binding = undefined;
+    for (&out, [_][]const u8{ "agent.spawn", "agent.list", "agent.show", "agent.tool", "agent.send", "agent.stop", "agent.archive", "agent.clean", "agent.takeover", "agent.takeback", "agent.wait", "agent.promote", "agent.takeover_split", "agent.takeover_pane", "harness.hook", "harness.permission_prompt", "agent.context", "agent.compact", "agent.fork", "agent.mcp_off", "usage.show", "usage.export", "inbox.list", "inbox.answer", "inbox.snooze", "inbox.batch", "always.list", "always.revoke", "harness.list", "harness.show", "provider.list", "tui.hold" }) |*b, verb| b.* = .{ .verb = verb, .handler = proto.VerbHandler.init(stub) };
     return out;
 }
 
@@ -390,7 +390,7 @@ test "workspaces: discovery, nesting, repo-less folders, durability and doctor o
 }
 
 test "base verb surface: serve, events, config, skill, doctor, mcp" {
-    const want = [_][]const u8{ "serve", "events", "config.get", "config.set", "config.check", "config.reload", "config.schema", "skill", "skill.install", "doctor", "mcp", "docs", "completions", "whoami", "workspace.add", "workspace.list", "workspace.remove", "workspace.scan", "agent.spawn", "agent.list", "agent.show", "agent.send", "agent.stop", "agent.archive", "inbox.list", "inbox.answer", "inbox.snooze", "harness.list", "harness.show" };
+    const want = [_][]const u8{ "serve", "events", "config.get", "config.set", "config.check", "config.reload", "config.schema", "skill", "skill.install", "doctor", "mcp", "docs", "completions", "whoami", "workspace.add", "workspace.list", "workspace.remove", "workspace.scan", "agent.spawn", "agent.list", "agent.show", "agent.send", "agent.stop", "agent.archive", "inbox.list", "inbox.answer", "inbox.snooze", "harness.list", "harness.show", "provider.list" };
     for (want) |name| {
         var found = false;
         for (main.App.verbs) |v| if (std.mem.eql(u8, v.name, name)) {

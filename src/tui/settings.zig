@@ -13,6 +13,8 @@ const log = @import("log");
 const config = @import("../config.zig");
 const scope = @import("../scope.zig");
 const zon_text = @import("zon_text.zig");
+const providers_mod = @import("providers.zig");
+const provider_popup = @import("provider_popup.zig");
 const keys = @import("keys.zig");
 const App = @import("app.zig").App;
 const Value = std.json.Value;
@@ -39,10 +41,22 @@ pub const Field = struct {
     kind: Kind,
 };
 
+/// A row of the Providers section: the "configure a new provider" action
+/// (`index` null) or one configured provider. ⏎ opens the provider popup.
+pub const ProviderRow = struct {
+    index: ?usize = null,
+    title: []const u8,
+    /// Harness · plan · signed in, on the right.
+    status: []const u8 = "",
+    detail: []const u8 = "",
+    mark: ?enum { ok, warn } = null,
+};
+
 /// A row of a section: a field, or a line to read (no config key behind it).
 pub const Row = union(enum) {
     field: Field,
     info: struct { title: []const u8, detail: []const u8 = "", mark: ?enum { ok, warn } = null },
+    provider: ProviderRow,
 };
 
 pub const Section = struct {
@@ -88,6 +102,9 @@ fn harnessFields(comptime name: []const u8, comptime label: []const u8) [3]Field
 /// key is one venom's config has, and that every key venom's config has is
 /// in a section.
 pub const sections = [_]Section{
+    // The providers come first; their rows and popup are their own
+    // (`providerRows`, provider_popup.zig). The raw values are under Integrations.
+    .{ .name = "Providers" },
     .{ .name = "General", .fields = &.{
         .{ .key = "log.level", .label = "Log level", .help = "Records less severe are dropped from every sink.", .kind = choice(log.Level) },
         .{ .key = "log.stderr_level", .label = "Log level on stderr", .kind = choice(log.Level) },
@@ -98,7 +115,7 @@ pub const sections = [_]Section{
     } },
     .{ .name = "Workspaces", .fields = &.{f_group} },
     .{ .name = "Agents", .fields = &.{
-        .{ .key = "agents.default", .label = "Harness", .help = "For a new agent when none is named.", .kind = choice(config.Harness) },
+        .{ .key = "agents.default", .label = "Harness", .help = "For a new agent when neither a harness nor a provider is named, and no default provider is set.", .kind = choice(config.Harness) },
         f_mode,
         f_isolation,
         f_max,
@@ -143,14 +160,19 @@ pub const sections = [_]Section{
         .{ .key = "ui.keys.timeout_ms", .label = "Leader timeout", .help = "Milliseconds without a key before the leader gives up; 0 waits. Applies when the TUI next starts.", .kind = .zon },
         .{ .key = "ui.keys.leave_terminal", .label = "Leave Terminal mode", .help = "A key with a modifier, such as ctrl+]. Applies when the TUI next starts.", .kind = .{ .text = .{} } },
     } },
-    .{ .name = "Integrations", .fields = &(harnessFields("claude_code", "claude-code") ++ harnessFields("codex", "codex") ++ harnessFields("acp", "ACP agent")) },
+    .{ .name = "Integrations", .fields = &([_]Field{
+        .{ .key = "agents.provider", .label = "Default provider (by name)", .help = "Empty: agents.default, with the harness's own login. Settings › Providers sets it.", .kind = .{ .text = .{ .optional = true } } },
+        .{ .key = "providers", .label = "Providers as ZON", .help = "A ZON tuple of .{ .name, .harness, .home, .model, .mode }. Settings › Providers edits it.", .kind = .zon },
+    } ++ harnessFields("claude_code", "claude-code") ++ harnessFields("codex", "codex") ++ harnessFields("acp", "ACP agent")) },
     .{ .name = "Raw config" },
 };
 
-pub const keys_section = 10;
+pub const providers_section = 0;
+pub const keys_section = 11;
+pub const integrations_section = 12;
 pub const raw_section = sections.len - 1;
-pub const workspaces_section = 1;
-pub const agents_section = 2;
+pub const workspaces_section = 2;
+pub const agents_section = 3;
 
 /// A config layer: `workspace` and `repo` are what
 /// `config.get` and `config.set` then carry.
@@ -202,6 +224,7 @@ pub const Failure = struct {
 pub const Request = union(enum) {
     workspaces,
     harnesses,
+    providers,
     /// A `config.get`; only the newest one (`values_request`) counts.
     get: u32,
     set,
@@ -220,6 +243,15 @@ pub const HarnessRow = struct {
 };
 
 pub const Focus = enum { sections, rows, preview };
+
+/// One `provider.list` entry.
+pub const ProviderStatus = struct {
+    name: []u8,
+    available: bool,
+    signed_in: ?bool,
+    plan: ?[]u8,
+    sign_in: []u8,
+};
 
 pub const Settings = struct {
     gpa: Allocator,
@@ -255,6 +287,10 @@ pub const Settings = struct {
     /// The field the prompt is editing; its key and label are owned (a Raw
     /// config field's point into `sources`, which any `config.get` replaces).
     editing: ?Field = null,
+    /// The provider popup, while open.
+    popup: ?provider_popup.Popup = null,
+    /// `provider.list`: sign-in state and plan per provider name.
+    statuses: std.ArrayList(ProviderStatus) = .empty,
     input: term.widgets.TextInput,
     /// `venom settings`: leaving the screen leaves the TUI.
     standalone: bool = false,
@@ -278,6 +314,9 @@ pub const Settings = struct {
         self.clearFailure();
         self.clearHarnesses();
         self.harnesses.deinit(self.gpa);
+        self.clearStatuses();
+        self.statuses.deinit(self.gpa);
+        self.closePopup();
         self.stopEditing();
         self.input.deinit();
     }
@@ -346,7 +385,15 @@ pub const Settings = struct {
         if (!app.connected) return;
         try app.request(.{ .settings = .workspaces }, "workspace.list", struct {}{});
         try app.request(.{ .settings = .harnesses }, "harness.list", struct {}{});
+        try self.requestStatuses(app);
         try self.requestValues(app);
+    }
+
+    /// Asks each provider's harness whether it is signed in.
+    pub fn requestStatuses(self: *Settings, app: *App) !void {
+        _ = self;
+        if (!app.connected) return;
+        try app.request(.{ .settings = .providers }, "provider.list", struct {}{});
     }
 
     fn requestValues(self: *Settings, app: *App) !void {
@@ -389,6 +436,7 @@ pub const Settings = struct {
         switch (request) {
             .workspaces => if (body == .ok) try self.setLayers(app, body.ok),
             .harnesses => if (body == .ok) try self.setHarnesses(body.ok),
+            .providers => if (body == .ok) try self.setStatuses(body.ok),
             .get => |sent| {
                 // Answered after a newer request, or for a layer since left.
                 if (sent != self.values_request) return;
@@ -442,6 +490,7 @@ pub const Settings = struct {
                         if (app.hold != null and app.hold.?.on_demand) app.say("saved; quit every venom and start venom again for it to apply", .{}) else app.say("saved; restart the daemon (venom serve) for it to apply", .{});
                     } else app.say("saved and reloaded", .{});
                 }
+                try self.requestStatuses(app);
                 try self.requestValues(app);
             },
         }
@@ -524,6 +573,37 @@ pub const Settings = struct {
             errdefer self.gpa.free(detail);
             try self.harnesses.append(self.gpa, .{ .ok = h.found and h.signed_in != false, .title = title, .detail = detail });
         }
+    }
+
+    fn clearStatuses(self: *Settings) void {
+        for (self.statuses.items) |x| {
+            self.gpa.free(x.name);
+            if (x.plan) |p| self.gpa.free(p);
+            self.gpa.free(x.sign_in);
+        }
+        self.statuses.clearRetainingCapacity();
+    }
+
+    fn setStatuses(self: *Settings, ok: Value) !void {
+        var arena = std.heap.ArenaAllocator.init(self.gpa);
+        defer arena.deinit();
+        const R = struct { providers: []const struct { name: []const u8, available: bool = false, signed_in: ?bool = null, plan: ?[]const u8 = null, sign_in: []const u8 = "" } = &.{} };
+        const r = std.json.parseFromValueLeaky(R, arena.allocator(), ok, .{ .ignore_unknown_fields = true }) catch return;
+        self.clearStatuses();
+        for (r.providers) |x| {
+            const name = try self.gpa.dupe(u8, x.name);
+            errdefer self.gpa.free(name);
+            const plan = if (x.plan) |p| try self.gpa.dupe(u8, p) else null;
+            errdefer if (plan) |p| self.gpa.free(p);
+            const sign_in = try self.gpa.dupe(u8, x.sign_in);
+            errdefer self.gpa.free(sign_in);
+            try self.statuses.append(self.gpa, .{ .name = name, .available = x.available, .signed_in = x.signed_in, .plan = plan, .sign_in = sign_in });
+        }
+    }
+
+    pub fn statusOf(self: *const Settings, name: []const u8) ?ProviderStatus {
+        for (self.statuses.items) |x| if (std.mem.eql(u8, x.name, name)) return x;
+        return null;
     }
 
     /// `workspace.list` answered: user, then each workspace and its repos.
@@ -686,8 +766,9 @@ pub const Settings = struct {
     pub fn rows(self: *const Settings, a: Allocator) ![]const Row {
         var out: std.ArrayList(Row) = .empty;
         const n = self.section;
+        if (n == providers_section) try self.providerRows(a, &out);
         for (sections[n].fields) |f| try out.append(a, .{ .field = f });
-        if (n == agents_section) {
+        if (n == integrations_section) {
             for (self.harnesses.items) |h| try out.append(a, .{ .info = .{ .title = h.title, .detail = h.detail, .mark = if (h.ok) .ok else .warn } });
         } else if (n == workspaces_section) {
             for (self.layers.items) |l| {
@@ -706,23 +787,155 @@ pub const Settings = struct {
         return out.items;
     }
 
+    /// The providers in effect, pending edits included (allocated in `a`).
+    pub fn providerList(self: *const Settings, a: Allocator) []const config.Provider {
+        return providers_mod.parse(a, self.value("providers"));
+    }
+
+    /// `agents.provider` in effect, pending edits included.
+    pub fn defaultProvider(self: *const Settings) ?[]const u8 {
+        const v = self.value("agents.provider") orelse return null;
+        const shown = displayValue(v);
+        return if (shown.len == 0) null else shown;
+    }
+
+    fn providerRows(self: *const Settings, a: Allocator, out: *std.ArrayList(Row)) !void {
+        try out.append(a, .{ .provider = .{ .title = "+ Configure a new provider", .detail = "Claude Code or Codex, with its own name, login (config dir), default model and permission." } });
+        const list = self.providerList(a);
+        const default = self.defaultProvider();
+        for (list, 0..) |p, i| {
+            const is_default = if (default) |d| std.mem.eql(u8, d, p.name) else false;
+            const st = self.statusOf(p.name);
+            var status: std.ArrayList(u8) = .empty;
+            try status.appendSlice(a, providers_mod.harnessName(p.harness));
+            if (st) |x| if (x.plan) |plan| try status.print(a, " · {s}", .{plan});
+            const signed: []const u8 = if (st) |x|
+                (if (!x.available) "harness off" else if (x.signed_in) |in| (if (in) "signed in" else "not signed in") else "sign-in unknown")
+            else
+                "checking…";
+            try status.print(a, " · {s}", .{signed});
+            const mark: @FieldType(ProviderRow, "mark") = if (st) |x| (if (x.available and x.signed_in == true) .ok else .warn) else null;
+            const title = if (is_default) try std.fmt.allocPrint(a, "{s}  ★ default", .{p.name}) else p.name;
+            const detail = if (st != null and st.?.signed_in == false)
+                try std.fmt.allocPrint(a, "Sign in: {s}", .{st.?.sign_in})
+            else
+                try std.fmt.allocPrint(a, "{s} · model {s} · permission {s}", .{ p.home orelse "default login", p.model orelse "default", providers_mod.modeLabel(p.harness, p.mode) });
+            try out.append(a, .{ .provider = .{ .index = i, .title = title, .status = status.items, .detail = detail, .mark = mark } });
+        }
+        if (default) |d| if (config.findProvider(list, d) == null)
+            try out.append(a, .{ .info = .{ .title = try std.fmt.allocPrint(a, "Default provider {s} does not exist", .{d}), .detail = "New agents use agents.default until it names a provider.", .mark = .warn } });
+    }
+
+    fn queueProviders(self: *Settings, app: *App, a: Allocator, list: []const config.Provider) !void {
+        try self.queue(app, "providers", try providers_mod.serialize(a, list));
+    }
+
+    fn queueDefault(self: *Settings, app: *App, a: Allocator, name: ?[]const u8) !void {
+        try self.queue(app, "agents.provider", if (name) |n| try encode(a, .{ .text = .{} }, n) else "null");
+    }
+
+    /// ⏎ on a Providers row: the popup, for a new provider or this one.
+    fn openPopup(self: *Settings, app: *App, r: ProviderRow) !void {
+        if (self.applying) return app.say("saving: wait for it to finish", .{});
+        if (!self.editable("providers")) return app.say("providers are user-only; S switches to the user layer", .{});
+        if (self.effective == null) return app.say("providers: not loaded yet", .{});
+        var arena = std.heap.ArenaAllocator.init(self.gpa);
+        defer arena.deinit();
+        const a = arena.allocator();
+        const list = self.providerList(a);
+        self.closePopup();
+        if (r.index) |i| {
+            if (i >= list.len) return;
+            const is_default = if (self.defaultProvider()) |d| std.mem.eql(u8, d, list[i].name) else false;
+            self.popup = try .init(self.gpa, i, list[i], is_default);
+        } else {
+            self.popup = try .init(self.gpa, null, .{ .name = try providers_mod.freeName(a, list, "claude"), .harness = .claude_code }, list.len == 0);
+        }
+    }
+
+    fn closePopup(self: *Settings) void {
+        if (self.popup) |*p| p.deinit();
+        self.popup = null;
+    }
+
+    pub fn popupKey(self: *Settings, app: *App, key: term.Input.Key) !void {
+        const p = &self.popup.?;
+        switch (try p.key(key)) {
+            .none => {},
+            .cancel => self.closePopup(),
+            .save => try self.savePopup(app),
+            .remove => try self.removePopup(app),
+        }
+    }
+
+    /// The popup's provider into `providers` (and `agents.provider`), saved
+    /// at once.
+    fn savePopup(self: *Settings, app: *App) !void {
+        const pop = &self.popup.?;
+        var arena = std.heap.ArenaAllocator.init(self.gpa);
+        defer arena.deinit();
+        const a = arena.allocator();
+        var list: std.ArrayList(config.Provider) = .empty;
+        try list.appendSlice(a, self.providerList(a));
+        const p = pop.provider();
+        if (!config.Provider.validName(p.name)) return pop.setFailure("the name is 1 to 64 characters, with no space at either end", .{});
+        for (list.items, 0..) |q, i| if (std.mem.eql(u8, q.name, p.name) and (pop.index == null or pop.index.? != i))
+            return pop.setFailure("another provider is named {s}", .{p.name});
+        if (p.home) |h| if (!(std.fs.path.isAbsolute(h) or std.mem.eql(u8, h, "~") or std.mem.startsWith(u8, h, "~/")))
+            return pop.setFailure("the config dir is absolute or starts with ~/", .{});
+        const default = self.defaultProvider();
+        var was_default = false;
+        if (pop.index) |i| {
+            if (i >= list.items.len) return self.closePopup();
+            was_default = if (default) |d| std.mem.eql(u8, d, list.items[i].name) else false;
+            list.items[i] = p;
+        } else try list.append(a, p);
+        try self.queueProviders(app, a, list.items);
+        if (pop.default) {
+            if (!was_default or !std.mem.eql(u8, default.?, p.name)) try self.queueDefault(app, a, p.name);
+        } else if (was_default) try self.queueDefault(app, a, null);
+        const name = try a.dupe(u8, p.name);
+        const new = pop.index == null;
+        self.closePopup();
+        try self.apply(app);
+        if (new) app.say("{s} added; sign in with the command on its row if it says not signed in", .{name});
+    }
+
+    fn removePopup(self: *Settings, app: *App) !void {
+        const pop = &self.popup.?;
+        const i = pop.index orelse return;
+        var arena = std.heap.ArenaAllocator.init(self.gpa);
+        defer arena.deinit();
+        const a = arena.allocator();
+        const list = self.providerList(a);
+        if (i >= list.len) return self.closePopup();
+        const next = try std.mem.concat(a, config.Provider, &.{ list[0..i], list[i + 1 ..] });
+        try self.queueProviders(app, a, next);
+        if (self.defaultProvider()) |d| if (std.mem.eql(u8, d, list[i].name)) try self.queueDefault(app, a, null);
+        self.closePopup();
+        self.row -|= 1;
+        try self.apply(app);
+    }
+
     // ---- Keys ----------------------------------------------------------
 
     /// A key from inside a bracketed paste: text for a prompt, nothing else.
     /// A paste never saves, toggles or submits.
     pub fn pasted(self: *Settings, key: term.Input.Key) !void {
-        if (self.editing == null or !k.pressed(key)) return;
-        if (keys.pastedBreak(key)) return self.input.insert(" ");
+        if ((self.editing == null and self.popup == null) or !k.pressed(key)) return;
+        if (keys.pastedBreak(key)) return if (self.popup) |*p| p.paste(" ") else self.input.insert(" ");
         if (key.mods.ctrl or key.mods.alt or key.codepoint < 0x20 or key.codepoint == 0x7f) return;
         // Private use: functional keys, not text.
         if (key.codepoint >= 0xE000 and key.codepoint <= 0xF8FF) return;
         var buf: [4]u8 = undefined;
         const n = std.unicode.utf8Encode(key.codepoint, &buf) catch return;
+        if (self.popup) |*p| return p.paste(buf[0..n]);
         try self.input.insert(buf[0..n]);
     }
 
     pub fn handleKey(self: *Settings, app: *App, key: term.Input.Key) !void {
         if (!k.pressed(key)) return;
+        if (self.popup != null) return self.popupKey(app, key);
         if (self.editing != null) return self.promptKey(app, key);
         const ctrl_c = k.ctrl(key, 'c');
         const leaving = ctrl_c or k.char(key, 'q') or k.named(key, .escape);
@@ -798,6 +1011,10 @@ pub const Settings = struct {
         }
         if (self.row >= rs.len) return;
         const row = rs[self.row];
+        if (row == .provider) {
+            if (k.named(key, .enter)) return self.openPopup(app, row.provider);
+            return;
+        }
         if (row != .field) return;
         if (k.named(key, .enter)) return self.edit(app, row.field, false);
     }
@@ -907,7 +1124,7 @@ fn shellQuote(a: Allocator, out: *std.ArrayList(u8), arg: []const u8) !void {
 const testing = std.testing;
 
 test "the sections are in order, and every config value is in one" {
-    const names = [_][]const u8{ "General", "Workspaces", "Agents", "Models and limits", "Permissions and grants", "Worktrees", "Attention", "Transcript", "Usage and budgets", "Appearance", "Keys", "Integrations", "Raw config" };
+    const names = [_][]const u8{ "Providers", "General", "Workspaces", "Agents", "Models and limits", "Permissions and grants", "Worktrees", "Attention", "Transcript", "Usage and budgets", "Appearance", "Keys", "Integrations", "Raw config" };
     for (names, sections) |n, s| try testing.expectEqualStrings(n, s.name);
     try testing.expectEqualStrings("Keys", sections[keys_section].name);
     try testing.expectEqualStrings("Workspaces", sections[workspaces_section].name);

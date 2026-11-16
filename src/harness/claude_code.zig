@@ -389,7 +389,7 @@ pub const ClaudeCode = struct {
             .mcp_off = true,
             // The `--permission-mode` choices of 2.1.319, without
             // `bypassPermissions`.
-            .permission_modes = &.{ "manual", "acceptEdits", "plan", "dontAsk", "auto" },
+            .permission_modes = &.{ "manual", "acceptEdits", "plan", "dontAsk", "auto", "bypassPermissions" },
         };
     }
 
@@ -404,8 +404,8 @@ pub const ClaudeCode = struct {
     /// the copy is made, for `start` and `resume_command`. When the copy is
     /// already there (an earlier take-over made it) it is
     /// resumed instead of copied again.
-    fn appendResume(self: *ClaudeCode, a: std.mem.Allocator, argv: *std.ArrayList([]const u8), id: []const u8, fork_source: ?[]const u8, cwd: []const u8, transcript_ref: ?[]const u8) !void {
-        if (fork_source) |source| if (!self.copyExists(a, id, cwd, transcript_ref)) {
+    fn appendResume(self: *ClaudeCode, a: std.mem.Allocator, argv: *std.ArrayList([]const u8), home: ?[]const u8, id: []const u8, fork_source: ?[]const u8, cwd: []const u8, transcript_ref: ?[]const u8) !void {
+        if (fork_source) |source| if (!self.copyExists(a, home, id, cwd, transcript_ref)) {
             try argv.appendSlice(a, &.{ "--resume", source, "--fork-session", "--session-id", id });
             return;
         };
@@ -416,8 +416,8 @@ pub const ClaudeCode = struct {
     /// `transcript_ref` when it names `<id>.jsonl`, else the file under
     /// `<config_dir>/projects/<encoded cwd>/`. Without a `config_dir` there is
     /// nothing to look in.
-    fn copyExists(self: *ClaudeCode, a: std.mem.Allocator, id: []const u8, cwd: []const u8, transcript_ref: ?[]const u8) bool {
-        const dir = self.config_dir orelse return false;
+    fn copyExists(self: *ClaudeCode, a: std.mem.Allocator, home: ?[]const u8, id: []const u8, cwd: []const u8, transcript_ref: ?[]const u8) bool {
+        const dir = home orelse self.config_dir orelse return false;
         const file = std.fmt.allocPrint(a, "{s}.jsonl", .{id}) catch return false;
         if (transcript_ref) |ref| if (std.mem.eql(u8, std.fs.path.basename(ref), file) and transcript.isTranscript(a, dir, ref)) return true;
         const direct = transcript.path(a, dir, cwd, id) catch return false;
@@ -430,7 +430,7 @@ pub const ClaudeCode = struct {
         var session: []const u8 = undefined;
         if (params.harness_session) |id| {
             session = id;
-            try self.appendResume(a, &argv, id, params.fork_source, params.cwd, params.transcript_ref);
+            try self.appendResume(a, &argv, params.home, id, params.fork_source, params.cwd, params.transcript_ref);
         } else {
             session = try newUuid(a);
             try argv.appendSlice(a, &.{ "--session-id", session });
@@ -453,6 +453,7 @@ pub const ClaudeCode = struct {
         s.endTurn();
         var env: std.ArrayList(contract.EnvVar) = .empty;
         try env.append(a, .{ .name = "VENOM_AGENT", .value = params.agent });
+        if (params.home) |d| try env.append(a, .{ .name = "CLAUDE_CONFIG_DIR", .value = d });
         if (self.mcp) |m| if (m.socket) |path| try env.append(a, .{ .name = mcp.socket_env, .value = path });
         return .{ .argv = argv.items, .cwd = params.cwd, .env = env.items, .harness_session = session };
     }
@@ -622,12 +623,12 @@ pub const ClaudeCode = struct {
         // A fork that has not started has no conversation yet: this command
         // makes it, as `start` would. Take-back could not see the
         // copy without `catch_up`, and the copy would not stop at `fork_at`.
-        if (record.fork_source != null and (self.config_dir == null or record.fork_at != null)) return error.UnsupportedCapability;
+        if (record.fork_source != null and ((record.home orelse self.config_dir) == null or record.fork_at != null)) return error.UnsupportedCapability;
         var argv: std.ArrayList([]const u8) = .empty;
         try argv.append(a, self.exe);
-        try self.appendResume(a, &argv, record.harness_session, record.fork_source, record.cwd, record.transcript_ref);
+        try self.appendResume(a, &argv, record.home, record.harness_session, record.fork_source, record.cwd, record.transcript_ref);
         var env: std.ArrayList(contract.EnvVar) = .empty;
-        if (self.config_dir) |d| try env.append(a, .{ .name = "CLAUDE_CONFIG_DIR", .value = d });
+        if (record.home orelse self.config_dir) |d| try env.append(a, .{ .name = "CLAUDE_CONFIG_DIR", .value = d });
         if (record.agent.len > 0) try env.append(a, .{ .name = "VENOM_AGENT", .value = record.agent });
         if (record.hooks) {
             const venom = if (self.mcp) |m| m.command else "venom";
@@ -639,7 +640,7 @@ pub const ClaudeCode = struct {
 
     /// `catch_up = transcript_file` (`claude_transcript.zig`).
     pub fn catch_up(self: *ClaudeCode, conv: *Conversation, record: contract.Resume) anyerror!u32 {
-        const dir = self.config_dir orelse return error.UnsupportedCapability;
+        const dir = record.home orelse self.config_dir orelse return error.UnsupportedCapability;
         var arena: std.heap.ArenaAllocator = .init(self.gpa);
         defer arena.deinit();
         const a = arena.allocator();
