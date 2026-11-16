@@ -303,14 +303,17 @@ pub const Settings = struct {
     leader: []const u8 = "space",
     /// Leaving was refused once because of unsaved changes.
     leave_armed: bool = false,
-    /// `x` was pressed once on this provider: a second `x` removes it.
-    remove_armed: ?usize = null,
+    /// `x` was pressed once on the provider with this name: a second `x`
+    /// on it removes it. By name, so a reload in between cannot point it
+    /// at another provider.
+    remove_armed: ?[]u8 = null,
 
     pub fn init(gpa: Allocator) Settings {
         return .{ .gpa = gpa, .input = .init(gpa, .{ .prompt = "› " }) };
     }
 
     pub fn deinit(self: *Settings) void {
+        if (self.remove_armed) |n| self.gpa.free(n);
         for (self.layers.items) |l| l.deinit(self.gpa);
         self.layers.deinit(self.gpa);
         if (self.effective) |e| self.gpa.free(e);
@@ -807,6 +810,8 @@ pub const Settings = struct {
     }
 
     fn providerRows(self: *const Settings, a: Allocator, out: *std.ArrayList(Row)) !void {
+        // Not loaded yet: no rows, and the view says loading.
+        if (self.effective == null) return;
         const list = self.providerList(a);
         if (list.len == 0) try out.append(a, .{ .provider = .{} });
         const default = self.defaultProvider();
@@ -947,7 +952,8 @@ pub const Settings = struct {
         if (self.defaultProvider()) |d| if (std.mem.eql(u8, d, list[i].name)) try self.queueDefault(app, a, null);
         self.row -|= 1;
         try self.apply(app);
-        app.say("{s} removed", .{list[i].name});
+        // apply says why when it did not start (no daemon): keep that.
+        if (self.applying) app.say("{s} removed", .{list[i].name});
     }
 
     /// `d` on a provider: it becomes the default for new agents, or stops
@@ -964,6 +970,7 @@ pub const Settings = struct {
         const was = if (self.defaultProvider()) |d| std.mem.eql(u8, d, name) else false;
         try self.queueDefault(app, a, if (was) null else name);
         try self.apply(app);
+        if (!self.applying) return;
         if (was) app.say("no default provider: new agents use agents.default", .{}) else app.say("{s} is the default provider", .{name});
     }
 
@@ -991,7 +998,8 @@ pub const Settings = struct {
         const leaving = ctrl_c or k.char(key, 'q') or k.named(key, .escape);
         if (!leaving) self.leave_armed = false;
         const arming = self.remove_armed;
-        if (!k.char(key, 'x')) self.remove_armed = null;
+        self.remove_armed = null;
+        defer if (arming) |n| self.gpa.free(n);
         if (leaving) return self.leave(app, ctrl_c or k.char(key, 'q') or self.standalone);
         if (k.char(key, '?')) {
             app.help = true;
@@ -1070,11 +1078,8 @@ pub const Settings = struct {
             const i = r.index orelse return;
             if (k.char(key, 'd')) return self.toggleDefault(app, i);
             if (k.char(key, 'x')) {
-                if (arming == i) {
-                    self.remove_armed = null;
-                    return self.removeAt(app, i);
-                }
-                self.remove_armed = i;
+                if (arming) |n| if (std.mem.eql(u8, n, r.name)) return self.removeAt(app, i);
+                self.remove_armed = try self.gpa.dupe(u8, r.name);
                 return app.say("x again removes {s}; any other key keeps it", .{r.name});
             }
             return;

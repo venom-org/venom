@@ -223,6 +223,13 @@ fn providerTable(app: *App, surface: *Surface, a: std.mem.Allocator, inner: Regi
             .{ .text = "n", .role = if (on) .accent else .normal, .style = .{ .bold = true } },
             .{ .text = "  configure the first provider", .role = .secondary },
         }, theme, .{ .ellipsis = true });
+        // A warning row after it (the default names no provider).
+        y += 2;
+        for (list[1..], 1..) |row, i| {
+            if (y >= bottom) return;
+            if (row == .info) try infoLine(app, surface, a, inner, y, row.info.title, row.info.detail, i == s.row and on);
+            y += 1;
+        }
         return;
     }
     var name_w: u16 = 8;
@@ -240,7 +247,7 @@ fn providerTable(app: *App, surface: *Surface, a: std.mem.Allocator, inner: Regi
         const on = i == s.row and s.focus == .rows;
         switch (row) {
             .provider => |r| {
-                const armed = s.remove_armed != null and r.index != null and s.remove_armed.? == r.index.?;
+                const armed = if (s.remove_armed) |n| std.mem.eql(u8, n, r.name) else false;
                 const card: Region = .{ .x = x0, .y = y, .width = room, .height = @min(card_h, bottom - y) };
                 const body = try w.box.draw(surface, card, theme, .{ .border = .single, .role = if (armed) .err else if (on) .accent else .border, .clear = true });
                 if (body.width < 8 or body.height == 0) {
@@ -290,16 +297,22 @@ fn providerTable(app: *App, surface: *Surface, a: std.mem.Allocator, inner: Regi
                 y += card.height;
             },
             .info => |info| {
-                const sel: ?term.Style = if (on) theme.style(.selection) else null;
-                const fill = if (on) w.theme.overlay(theme.style(.normal), theme.style(.selection)) else theme.style(.normal);
-                try surface.clear(.{ .x = inner.x, .y = y, .width = inner.width, .height = 1 }, fill);
-                if (on) try surface.put(inner.x, y, .{ .text = "▌", .style = w.theme.overlay(theme.style(.accent), theme.style(.selection)) });
-                _ = try w.text.drawText(surface, x0 + 1, y, room -| 1, try std.fmt.allocPrint(a, "▲ {s}. {s}", .{ info.title, info.detail }), .warn, theme, .{ .ellipsis = true, .overlay = sel, .fill = fill });
+                try infoLine(app, surface, a, inner, y, info.title, info.detail, on);
                 y += 2;
             },
             .field => {},
         }
     }
+}
+
+/// A warning line of the Providers section, with the selection when `on`.
+fn infoLine(app: *App, surface: *Surface, a: std.mem.Allocator, inner: Region, y: u16, title: []const u8, detail: []const u8, on: bool) !void {
+    const theme = &app.theme;
+    const sel: ?term.Style = if (on) theme.style(.selection) else null;
+    const fill = if (on) w.theme.overlay(theme.style(.normal), theme.style(.selection)) else theme.style(.normal);
+    try surface.clear(.{ .x = inner.x, .y = y, .width = inner.width, .height = 1 }, fill);
+    if (on) try surface.put(inner.x, y, .{ .text = "▌", .style = w.theme.overlay(theme.style(.accent), theme.style(.selection)) });
+    _ = try w.text.drawText(surface, inner.x + 2, y, inner.width -| 3, try std.fmt.allocPrint(a, "▲ {s}. {s}", .{ title, detail }), .warn, theme, .{ .ellipsis = true, .overlay = sel, .fill = fill });
 }
 
 /// A field's value as its row shows it.

@@ -310,17 +310,18 @@ pub const Popup = struct {
             y += 1;
         }
         // Actions, as buttons: the key in `bone` bold, its label after it.
+        // Left to right while they fit inside the popup; ⌃d Remove at the
+        // right edge when there is room for it too.
         const save_label: []const u8 = if (self.index == null) "Add provider" else "Save";
+        const end = lx + text_w;
+        const remove_w: u16 = if (self.index != null) @intCast(w.text.width("⌃d Remove") + 2) else 0;
         var ax = lx;
-        ax += try button(surface, theme, ax, actions_y, "⏎", save_label, problem == null);
-        ax += 2;
-        ax += try button(surface, theme, ax, actions_y, "esc", "Cancel", true);
-        ax += 2;
-        _ = try button(surface, theme, ax, actions_y, "⇥", "Next field", true);
-        if (self.index != null) {
-            const rw: u16 = @intCast(w.text.width("⌃d Remove"));
-            if (lx + text_w > ax + rw + 14) _ = try button(surface, theme, lx + text_w - rw, actions_y, "⌃d", "Remove", !self.remove_armed);
+        for ([_][2][]const u8{ .{ "⏎", save_label }, .{ "esc", "Cancel" }, .{ "⇥", "Next field" } }, 0..) |b, n| {
+            const bw_: u16 = @intCast(w.text.width(b[0]) + 1 + w.text.width(b[1]));
+            if (ax + bw_ > end -| (if (n == 0) 0 else remove_w)) break;
+            ax += try button(surface, theme, ax, actions_y, b[0], b[1], n != 0 or problem == null) + 2;
         }
+        if (self.index != null and ax + remove_w <= end) _ = try button(surface, theme, end - (remove_w - 2), actions_y, "⌃d", "Remove", !self.remove_armed);
     }
 };
 
@@ -401,7 +402,11 @@ fn wrap(a: std.mem.Allocator, text: []const u8, width: u16, max: usize) ![]const
             cut = end;
             at = end + 1;
         }
-        if (cut == 0) cut = @min(rest.len, width);
+        if (cut == 0) {
+            // One word wider than the line: cut it, on a character boundary.
+            cut = @max(@min(rest.len, width), 1);
+            while (cut < rest.len and cut > 1 and (rest[cut] & 0xC0) == 0x80) cut -= 1;
+        }
         try out.append(a, rest[0..cut]);
         rest = std.mem.trimStart(u8, rest[cut..], " ");
     }
