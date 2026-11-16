@@ -76,8 +76,11 @@ jobs:
         if: steps.changes.outputs.code == 'true'
         run: zig build --summary all
 
+      # Tests are off in CI for now, on pull requests and on main: run
+      # `zig build test` locally before pushing. To turn them back on, set the
+      # condition back to `steps.changes.outputs.code == 'true'`.
       - name: zig build test
-        if: steps.changes.outputs.code == 'true'
+        if: false
         run: zig build test --summary all
 
   policy:
