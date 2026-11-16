@@ -103,12 +103,12 @@ test "panel: lists workspaces and repos; + adds, R rescans, and a paste does nei
     _ = try only(try drain(a, &app), "workspace.list");
     try respond(&app, a, .workspaces, workspace_list);
     var screen = try render(&app, &surface, a);
-    try testing.expect(has(screen, "Workspaces"));
+    try testing.expect(has(screen, "WORKSPACES"));
     try testing.expect(has(screen, "venom-org"));
     try testing.expect(has(screen, "3 repos"));
     try testing.expect(has(screen, "plain folder"));
     try testing.expect(has(screen, "venom-docs"));
-    try testing.expect(has(screen, "│ NORMAL"));
+    try testing.expect(has(screen, "│  NORMAL"));
     // The repo facts: Branch (with clean or dirty), Worktrees and Issue; a
     // repo the daemon said nothing about shows `-`.
     try testing.expect(has(screen, "Branch"));
@@ -218,7 +218,7 @@ test "dialog: the options are the request; repos are never sent empty" {
     try testing.expect(has(screen, "+ ~/venom-org/venom-std-246/    branch 246-hello-caps (existing)"));
     try testing.expect(has(screen, "◉ claude-code"));
     try testing.expect(has(screen, "◉ Worktree per repo"));
-    try testing.expect(has(screen, "│ INPUT"));
+    try testing.expect(has(screen, "│  INPUT"));
 
     // Typing in the task does not ask again; it is text, q and all.
     _ = try app.feed("quit q\\ n");
@@ -571,7 +571,7 @@ test "dialog: another client's agent.created refreshes the preview; rows that do
     var app = App.init(ta);
     defer app.deinit();
     try t.fixtureApp(&app, a);
-    var surface = try term.Surface.init(ta, 100, 18);
+    var surface = try term.Surface.init(ta, 100, 19);
     var discard: std.Io.Writer.Discarding = .init(&.{});
     defer surface.deinit(&discard.writer);
     _ = try render(&app, &surface, a);

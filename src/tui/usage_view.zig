@@ -19,6 +19,7 @@
 const std = @import("std");
 const term = @import("venom-term");
 const w = term.widgets;
+const pane = @import("pane.zig");
 const k = term.widgets.keys;
 const Surface = term.Surface;
 const Region = term.Region;
@@ -278,7 +279,7 @@ pub fn render(app: *App, surface: *Surface, main: Region) !void {
     const u = &app.usage;
     const theme = &app.theme;
     const badge = try std.fmt.allocPrint(a, "{s} · by {s}", .{ @tagName(u.range), @tagName(u.group) });
-    const inner = try w.box.draw(surface, main, theme, .{ .title = "Usage", .badge = badge, .focused = app.context_panel.agent == null });
+    const inner = try pane.draw(surface, main, theme, .{ .title = "USAGE", .badge = badge, .focused = app.context_panel.agent == null });
     if (inner.height == 0 or inner.width < 4) return;
     const left = inner.x + 1;
     const right = inner.x + inner.width -| 1;

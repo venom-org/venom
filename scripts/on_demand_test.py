@@ -94,6 +94,58 @@ class Tui:
         plain = re.sub(rb"\x1b(\[[0-9;:?<>=]*[ -/]*[@-~]|[@-Z\\-_])", b" ", self.out).decode("utf-8", "replace")
         return " ".join(plain.split())
 
+    def screen(self):
+        """The output replayed onto a grid, one string per row. Only changed
+        cells are written, so a phrase can be on screen without ever being
+        in the output in one piece; `text()` cannot see that, this can."""
+        import re
+        cells = {}
+        row = col = 0
+        tokens = re.finditer(r"\x1b\[([0-9;:?<>=]*)[ -/]*([@-~])|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[P_^][^\x1b]*\x1b\\|\x1b(.)|(.)", self.out.decode("utf-8", "replace"), re.S)
+        for m in tokens:
+            if m.group(3) == "M":
+                # Reverse index: one row up.
+                row = max(row - 1, 0)
+                continue
+            ch = m.group(4)
+            if ch is not None:
+                if ch == "\r":
+                    col = 0
+                elif ch == "\n":
+                    # Raw mode: a line feed keeps the column.
+                    row += 1
+                elif ch >= " ":
+                    cells[(row, col)] = ch
+                    col += 1
+                continue
+            final = m.group(2)
+            if final is None:
+                continue
+            args = [int(x) if x.isdigit() else 0 for x in m.group(1).split(";")]
+            n = args[0] or 1
+            if final in "Hf":
+                row = (args[0] or 1) - 1
+                col = ((args[1] if len(args) > 1 else 0) or 1) - 1
+            elif final == "C":
+                col += n
+            elif final == "G":
+                col = n - 1
+            elif final == "d":
+                row = n - 1
+            elif final == "J" and args[0] == 2:
+                cells.clear()
+            elif final == "K":
+                for k in [k for k in cells if k[0] == row and k[1] >= col]:
+                    del cells[k]
+        rows = max((r for r, _ in cells), default=-1) + 1
+        width = max((c for _, c in cells), default=-1) + 1
+        return ["".join(cells.get((r, c), " ") for c in range(width)) for r in range(rows)]
+
+    def shows(self, phrase):
+        """`phrase` is on one row of the screen, spacing aside."""
+        want = " ".join(phrase.split())
+        return any(want in " ".join(r.split()) for r in self.screen())
+
     def quit(self):
         os.write(self.master, b"q")
         try:
@@ -472,7 +524,7 @@ class Test:
         expect(code == 0 and a2["state"] == "queued", a2)
         until("the harness to start", lambda: os.path.exists(out + ".argvs"))
         os.write(t.master, b"q")
-        until("the quit confirmation", lambda: (t.drain(), "Quit venom? 1 agent is running, 1 is queued." in t.text())[1])
+        until("the quit confirmation", lambda: (t.drain(), t.shows("Quit venom? 1 agent is running, 1 is queued."))[1])
         expect(t.proc.poll() is None, "venom quit without asking")
         os.write(t.master, b"\r")
         until("the TUI to quit", lambda: (t.drain(), t.proc.poll() is not None)[1], 10)

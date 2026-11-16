@@ -23,6 +23,7 @@
 const std = @import("std");
 const term = @import("venom-term");
 const w = term.widgets;
+const pane = @import("pane.zig");
 const Surface = term.Surface;
 const Region = term.Region;
 const Value = std.json.Value;
@@ -372,7 +373,7 @@ pub fn render(app: *App, surface: *Surface, main: Region) !void {
     const cols = w.layout.sideBySide(main, .{ .fixed = side_w });
 
     // The workspaces, two rows each, then the add-folder row.
-    const left = try w.box.draw(surface, cols[0], theme, .{ .title = "Workspaces", .badge = try std.fmt.allocPrint(a, "{d}", .{p.items.len}), .focused = !p.adding });
+    const left = try pane.draw(surface, cols[0], theme, .{ .rule_right = true, .title = "WORKSPACES", .badge = try std.fmt.allocPrint(a, "{d}", .{p.items.len}), .focused = !p.adding });
     if (!p.loaded) {
         _ = try w.text.drawText(surface, left.x + 1, left.y, left.width -| 2, "loading…", .faint, theme, .{});
     }
@@ -401,10 +402,10 @@ pub fn render(app: *App, surface: *Surface, main: Region) !void {
     // Its repos, and the add-folder box under them while it is open.
     const parts = if (p.adding) w.layout.stacked(cols[1], .{ .fixed = 3 }) else [2]Region{ cols[1], .{ .width = 0, .height = 0 } };
     const ws = p.current();
-    const right = try w.box.draw(surface, parts[0], theme, .{ .title = if (ws) |c| c.name() else "No workspace", .badge = if (ws) |c| tail(try app.shortPath(a, c.path), parts[0].width -| 16) else "" });
+    const right = try pane.draw(surface, parts[0], theme, .{ .title = if (ws) |c| c.name() else "No workspace", .badge = if (ws) |c| tail(try app.shortPath(a, c.path), parts[0].width -| 16) else "" });
     if (ws) |c| try reposTable(app, surface, a, right, c);
     if (p.adding) {
-        const box = try w.box.draw(surface, parts[1], theme, .{ .title = "Add a folder", .badge = "esc cancels", .focused = true });
+        const box = try w.box.draw(surface, parts[1], theme, .{ .border = .single, .title = "Add a folder", .badge = "esc cancels", .focused = true });
         try p.path_input.draw(surface, box, theme, true);
     }
 }

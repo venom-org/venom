@@ -1,9 +1,10 @@
 name: ci
 
+# Manual only, for now: pull requests and pushes to main run nothing. Run
+# `zig fmt --check .`, `zig build` and `zig build test` locally before a push.
+# To turn CI back on, restore the pull_request and push (main) triggers.
 on:
-  pull_request:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read

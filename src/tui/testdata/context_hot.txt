@@ -1,24 +1,24 @@
-╭ Agents ────── 0 live ╮╭ No agent ────────────────────────────────────────────╮
-│                      ││ No agents yet. Start one with venom agent spawn      │
-│                      ││ --cwd=<folder> --task=<text>.                        │
-│                      ││                                                      │
-│                      ││                                                      │
-│       ╭ Context window ──────────────────────── cfg ZON schema verbs ╮       │
-│       │ ▰▰▰▰▰▰▰▰▰▱ 88%                                               │       │
-│       │ 176k of 200k                                                 │       │
-│       │                                                              │       │
-│       │ What fills it · estimated                                    │       │
-│       │ system, instructions, tool definitions                   31k │       │
-│       │ messages + tool results                                 100k │       │
-│       │ files read                                               45k │       │
-│       │                                                              │       │
-│       │ Actions                                                      │       │
-│       │ c  Compact now                                               │       │
-│       │ f  Fork to a fresh agent with a summary                      │       │
-│       ╰──────────────────────────────────────────────────────────────╯       │
-│                      │╰──────────────────────────────────────────────────────╯
-│                      │╭ Input ───────────────────────────────────────────────╮
-│                      ││› Write a prompt; enter sends it (agent send)         │
-│                      ││                                 context ▱▱▱▱▱▱▱▱▱▱ — │
-╰──────────────────────╯╰──────────────────────────────────────────────────────╯
- ▲ 0 need you · ◆ 0 running │ no agents │ NORMAL   c compact  f fork  esc close
+ AGENTS          STATE │ No agent
+───────────────────────│────────────────────────────────────────────────────────
+ / filter: har… 0 live │ No agents yet. Start one with venom agent spawn
+                       │ --cwd=<folder> --task=<text>.
+        ╭ Context window ──────────────────────── cfg ZON schema verbs ╮
+        │ ▰▰▰▰▰▰▰▰▰▱ 88%                                               │
+        │ 176k of 200k                                                 │
+        │                                                              │
+        │ What fills it · estimated                                    │
+        │ system, instructions, tool definitions                   31k │
+        │ messages + tool results                                 100k │
+        │ files read                                               45k │
+        │                                                              │
+        │ Actions                                                      │
+        │ c  Compact now                                               │
+        │ f  Fork to a fresh agent with a summary                      │
+        ╰──────────────────────────────────────────────────────────────╯
+                       │
+                       │┌ Input ───────────────────────────────────────────────┐
+                       ││› Write a prompt; enter sends it (agent send)         │
+                       ││                                 context ▱▱▱▱▱▱▱▱▱▱ — │
+                       │└──────────────────────────────────────────────────────┘
+ c compact   f fork   esc close
+ venom ◤ ▸agents                        │  NORMAL  │ ▲ 0 need you │ ◆ 0 running

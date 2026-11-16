@@ -219,6 +219,8 @@ test "inbox screen snapshot matches testdata/inbox_view.txt" {
     var app = App.init(ta);
     defer app.deinit();
     try fixture(&app, a);
+    // The bar's clock in UTC, whatever the machine's zone.
+    app.utc_offset_override = 0;
     var surface = try term.Surface.init(ta, 120, 30);
     var discard: std.Io.Writer.Discarding = .init(&.{});
     defer surface.deinit(&discard.writer);
@@ -318,8 +320,8 @@ test "inbox keys: every kind's actions, answer-and-advance, refused mixed batch,
     _ = try app.feed("r");
     try view.render(&app, &surface);
     const asking = try t.dump(a, &surface);
-    try testing.expect(std.mem.indexOf(u8, asking, "╭ Deny with a reason") != null);
-    try testing.expect(std.mem.indexOf(u8, asking, "│ INPUT") != null);
+    try testing.expect(std.mem.indexOf(u8, asking, "┌ Deny with a reason") != null);
+    try testing.expect(std.mem.indexOf(u8, asking, "│  INPUT") != null);
     _ = try app.feed("no\x1b");
     try testing.expect(app.prompt == null and (try take(a, &app)) == null);
     _ = try app.feed("r\r");
@@ -435,7 +437,7 @@ test "inbox keys: every kind's actions, answer-and-advance, refused mixed batch,
     try testing.expect(std.mem.indexOf(u8, try t.dump(a, &surface), "y allow once  a always  e edit") != null);
     _ = try app.feed("r"); // deny with a reason, inline
     try view.render(&app, &surface);
-    try testing.expect(std.mem.indexOf(u8, try t.dump(a, &surface), "╭ Deny with a reason") != null);
+    try testing.expect(std.mem.indexOf(u8, try t.dump(a, &surface), "┌ Deny with a reason") != null);
     _ = try app.feed("\x1b");
     try testing.expect(app.prompt == null);
     try testing.expectEqual(@import("app.zig").Area.transcript, app.area());
@@ -533,7 +535,7 @@ test "live: the inbox answers every kind against the fake harness, with answer-a
         try t.until(&app, &link, &surface, &d, "the next item", Items{ .n = n });
     }
     _ = try app.feed(" i");
-    try t.until(&app, &link, &surface, &d, "the inbox screen", t.Shows{ .text = "╭ Inbox ─" });
+    try t.until(&app, &link, &surface, &d, "the inbox screen", t.Shows{ .text = " INBOX " });
     try cursorIs(&app, "a1/r1");
 
     // A batch over exec:zig and the rm grant is refused, unsent; a1 + a2

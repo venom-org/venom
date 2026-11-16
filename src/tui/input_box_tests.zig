@@ -581,12 +581,12 @@ test "modes: the status bar names the mode" {
     var discard: std.Io.Writer.Discarding = .init(&.{});
     defer surface.deinit(&discard.writer);
     try view.render(&f.app, &surface);
-    try testing.expect(std.mem.indexOf(u8, try t.dump(f.a(), &surface), "│ NORMAL") != null);
+    try testing.expect(std.mem.indexOf(u8, try t.dump(f.a(), &surface), "│  NORMAL") != null);
     _ = try f.app.feed("i");
     try view.render(&f.app, &surface);
     const typing = try t.dump(f.a(), &surface);
-    try testing.expect(std.mem.indexOf(u8, typing, "│ INPUT") != null);
-    try testing.expect(std.mem.indexOf(u8, typing, "╭ Input ") != null);
+    try testing.expect(std.mem.indexOf(u8, typing, "│  INPUT") != null);
+    try testing.expect(std.mem.indexOf(u8, typing, "┌ Input ") != null);
     try testing.expect(std.mem.indexOf(u8, typing, "Reply") == null);
     _ = try t.sent(f.a(), &f.app);
 }
