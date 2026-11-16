@@ -1,9 +1,10 @@
 name: ci
 
+# Manual only, for now: pull requests and pushes to main run nothing. Run
+# `zig fmt --check .`, `zig build` and `zig build test` locally before a push.
+# To turn CI back on, restore the pull_request and push (main) triggers.
 on:
-  pull_request:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -45,12 +46,6 @@ jobs:
               echo "$files"
             fi
           fi
-          # Zig setup, fmt, build and test are off in CI for now, on pull
-          # requests and on main: they run locally before a push. The job
-          # still runs and passes, so the required `zig` check reports. To
-          # turn them back on, drop this line and set the test step's
-          # condition back to `steps.changes.outputs.code == 'true'`.
-          code=false
           echo "code=${code}" >> "$GITHUB_OUTPUT"
 
       - name: Check .zigversion is on the 0.17 release line
@@ -82,9 +77,8 @@ jobs:
         if: steps.changes.outputs.code == 'true'
         run: zig build --summary all
 
-      # Off in CI for now, with the rest (see `code=false` above).
       - name: zig build test
-        if: false
+        if: steps.changes.outputs.code == 'true'
         run: zig build test --summary all
 
   policy:
