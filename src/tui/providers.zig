@@ -44,6 +44,27 @@ fn optStr(wr: *std.Io.Writer, s: ?[]const u8) !void {
     if (s) |x| try str(wr, x) else try wr.writeAll("null");
 }
 
+/// One provider as the ZON entry `providers` holds, unset fields left out:
+/// `.{ .name = "work", .harness = .codex, .home = "~/.codex_work" }`.
+pub fn entryZon(a: Allocator, p: Provider) ![]const u8 {
+    var out: std.Io.Writer.Allocating = .init(a);
+    const wr = &out.writer;
+    try wr.writeAll(".{ .name = ");
+    try str(wr, p.name);
+    try wr.print(", .harness = .{s}", .{@tagName(p.harness)});
+    if (p.home) |h| {
+        try wr.writeAll(", .home = ");
+        try str(wr, h);
+    }
+    if (p.model) |m| {
+        try wr.writeAll(", .model = ");
+        try str(wr, m);
+    }
+    if (p.mode) |m| try wr.print(", .mode = .{s}", .{@tagName(m)});
+    try wr.writeAll(" }");
+    return out.written();
+}
+
 /// The harness id agents carry for `h`.
 pub fn harnessName(h: config.Harness) []const u8 {
     return switch (h) {

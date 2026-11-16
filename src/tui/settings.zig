@@ -41,14 +41,19 @@ pub const Field = struct {
     kind: Kind,
 };
 
-/// A row of the Providers section: the "configure a new provider" action
-/// (`index` null) or one configured provider. ⏎ opens the provider popup.
+/// A row of the Providers section: one configured provider, or (`index`
+/// null) the empty state, whose ⏎ configures the first. ⏎ opens the popup.
 pub const ProviderRow = struct {
     index: ?usize = null,
-    title: []const u8,
-    /// Harness · plan · signed in, on the right.
+    name: []const u8 = "",
+    harness: []const u8 = "",
+    /// The config dir, or "default login".
+    login: []const u8 = "",
+    model: []const u8 = "",
+    permission: []const u8 = "",
+    /// Plan · signed in, or what is wrong.
     status: []const u8 = "",
-    detail: []const u8 = "",
+    default: bool = false,
     mark: ?enum { ok, warn } = null,
 };
 
@@ -298,6 +303,8 @@ pub const Settings = struct {
     leader: []const u8 = "space",
     /// Leaving was refused once because of unsaved changes.
     leave_armed: bool = false,
+    /// `x` was pressed once on this provider: a second `x` removes it.
+    remove_armed: ?usize = null,
 
     pub fn init(gpa: Allocator) Settings {
         return .{ .gpa = gpa, .input = .init(gpa, .{ .prompt = "› " }) };
@@ -800,30 +807,39 @@ pub const Settings = struct {
     }
 
     fn providerRows(self: *const Settings, a: Allocator, out: *std.ArrayList(Row)) !void {
-        try out.append(a, .{ .provider = .{ .title = "+ Configure a new provider", .detail = "Claude Code or Codex, with its own name, login (config dir), default model and permission." } });
         const list = self.providerList(a);
+        if (list.len == 0) try out.append(a, .{ .provider = .{} });
         const default = self.defaultProvider();
         for (list, 0..) |p, i| {
-            const is_default = if (default) |d| std.mem.eql(u8, d, p.name) else false;
             const st = self.statusOf(p.name);
             var status: std.ArrayList(u8) = .empty;
-            try status.appendSlice(a, providers_mod.harnessName(p.harness));
-            if (st) |x| if (x.plan) |plan| try status.print(a, " · {s}", .{plan});
-            const signed: []const u8 = if (st) |x|
-                (if (!x.available) "harness off" else if (x.signed_in) |in| (if (in) "signed in" else "not signed in") else "sign-in unknown")
-            else
-                "checking…";
-            try status.print(a, " · {s}", .{signed});
-            const mark: @FieldType(ProviderRow, "mark") = if (st) |x| (if (x.available and x.signed_in == true) .ok else .warn) else null;
-            const title = if (is_default) try std.fmt.allocPrint(a, "{s}  ★ default", .{p.name}) else p.name;
-            const detail = if (st != null and st.?.signed_in == false)
-                try std.fmt.allocPrint(a, "Sign in: {s}", .{st.?.sign_in})
-            else
-                try std.fmt.allocPrint(a, "{s} · model {s} · permission {s}", .{ p.home orelse "default login", p.model orelse "default", providers_mod.modeLabel(p.harness, p.mode) });
-            try out.append(a, .{ .provider = .{ .index = i, .title = title, .status = status.items, .detail = detail, .mark = mark } });
+            if (st) |x| {
+                try status.appendSlice(a, if (!x.available) "harness off" else if (x.signed_in) |in| (if (in) "signed in" else "not signed in: run its sign-in command") else "sign-in unknown");
+                if (x.plan) |plan| if (x.signed_in == true) try status.print(a, ", {s} plan", .{plan});
+            } else try status.appendSlice(a, "checking sign-in…");
+            try out.append(a, .{ .provider = .{
+                .index = i,
+                .name = p.name,
+                .harness = providers_mod.harnessName(p.harness),
+                .login = p.home orelse "default login",
+                .model = p.model orelse "default",
+                .permission = providers_mod.modeLabel(p.harness, p.mode),
+                .status = status.items,
+                .default = if (default) |d| std.mem.eql(u8, d, p.name) else false,
+                .mark = if (st) |x| (if (x.available and x.signed_in == true) .ok else .warn) else null,
+            } });
         }
         if (default) |d| if (config.findProvider(list, d) == null)
             try out.append(a, .{ .info = .{ .title = try std.fmt.allocPrint(a, "Default provider {s} does not exist", .{d}), .detail = "New agents use agents.default until it names a provider.", .mark = .warn } });
+    }
+
+    /// The provider under the cursor, when the Providers section shows one.
+    pub fn selectedProvider(self: *const Settings, a: Allocator) !?ProviderRow {
+        if (self.section != providers_section) return null;
+        const rs = try self.rows(a);
+        if (self.row >= rs.len or rs[self.row] != .provider) return null;
+        const r = rs[self.row].provider;
+        return if (r.index == null) null else r;
     }
 
     fn queueProviders(self: *Settings, app: *App, a: Allocator, list: []const config.Provider) !void {
@@ -878,11 +894,7 @@ pub const Settings = struct {
         var list: std.ArrayList(config.Provider) = .empty;
         try list.appendSlice(a, self.providerList(a));
         const p = pop.provider();
-        if (!config.Provider.validName(p.name)) return pop.setFailure("the name is 1 to 64 characters, with no space at either end", .{});
-        for (list.items, 0..) |q, i| if (std.mem.eql(u8, q.name, p.name) and (pop.index == null or pop.index.? != i))
-            return pop.setFailure("another provider is named {s}", .{p.name});
-        if (p.home) |h| if (!(std.fs.path.isAbsolute(h) or std.mem.eql(u8, h, "~") or std.mem.startsWith(u8, h, "~/")))
-            return pop.setFailure("the config dir is absolute or starts with ~/", .{});
+        if (try self.popupProblem(a)) |why| return pop.setFailure("{s}", .{why});
         const default = self.defaultProvider();
         var was_default = false;
         if (pop.index) |i| {
@@ -901,20 +913,58 @@ pub const Settings = struct {
         if (new) app.say("{s} added; sign in with the command on its row if it says not signed in", .{name});
     }
 
+    /// Why the popup's provider cannot be saved as it is; null when it can.
+    /// The popup shows it as you type; a save is refused with it.
+    pub fn popupProblem(self: *const Settings, a: Allocator) !?[]const u8 {
+        const pop = if (self.popup) |*x| x else return null;
+        const p = pop.provider();
+        if (p.name.len == 0) return "name it: spawns and the CLI pick a provider by name";
+        if (!config.Provider.validName(p.name)) return "the name is 1 to 64 characters, with no space at either end";
+        for (self.providerList(a), 0..) |q, i| if (std.mem.eql(u8, q.name, p.name) and (pop.index == null or pop.index.? != i))
+            return try std.fmt.allocPrint(a, "another provider is named {s}", .{p.name});
+        if (p.home) |h| if (!(std.fs.path.isAbsolute(h) or std.mem.eql(u8, h, "~") or std.mem.startsWith(u8, h, "~/")))
+            return "the config dir is absolute or starts with ~/";
+        return null;
+    }
+
     fn removePopup(self: *Settings, app: *App) !void {
-        const pop = &self.popup.?;
-        const i = pop.index orelse return;
+        const i = self.popup.?.index orelse return;
+        self.closePopup();
+        try self.removeAt(app, i);
+    }
+
+    /// Removes provider `i` (and the default, when it was), saved at once.
+    fn removeAt(self: *Settings, app: *App, i: usize) !void {
+        if (self.applying) return app.say("saving: wait for it to finish", .{});
+        if (!self.editable("providers")) return app.say("providers are user-only; S switches to the user layer", .{});
         var arena = std.heap.ArenaAllocator.init(self.gpa);
         defer arena.deinit();
         const a = arena.allocator();
         const list = self.providerList(a);
-        if (i >= list.len) return self.closePopup();
+        if (i >= list.len) return;
         const next = try std.mem.concat(a, config.Provider, &.{ list[0..i], list[i + 1 ..] });
         try self.queueProviders(app, a, next);
         if (self.defaultProvider()) |d| if (std.mem.eql(u8, d, list[i].name)) try self.queueDefault(app, a, null);
-        self.closePopup();
         self.row -|= 1;
         try self.apply(app);
+        app.say("{s} removed", .{list[i].name});
+    }
+
+    /// `d` on a provider: it becomes the default for new agents, or stops
+    /// being it. Saved at once, as the popup saves.
+    fn toggleDefault(self: *Settings, app: *App, i: usize) !void {
+        if (self.applying) return app.say("saving: wait for it to finish", .{});
+        if (!self.editable("agents.provider")) return app.say("the default provider is user-only; S switches to the user layer", .{});
+        var arena = std.heap.ArenaAllocator.init(self.gpa);
+        defer arena.deinit();
+        const a = arena.allocator();
+        const list = self.providerList(a);
+        if (i >= list.len) return;
+        const name = list[i].name;
+        const was = if (self.defaultProvider()) |d| std.mem.eql(u8, d, name) else false;
+        try self.queueDefault(app, a, if (was) null else name);
+        try self.apply(app);
+        if (was) app.say("no default provider: new agents use agents.default", .{}) else app.say("{s} is the default provider", .{name});
     }
 
     // ---- Keys ----------------------------------------------------------
@@ -940,6 +990,8 @@ pub const Settings = struct {
         const ctrl_c = k.ctrl(key, 'c');
         const leaving = ctrl_c or k.char(key, 'q') or k.named(key, .escape);
         if (!leaving) self.leave_armed = false;
+        const arming = self.remove_armed;
+        if (!k.char(key, 'x')) self.remove_armed = null;
         if (leaving) return self.leave(app, ctrl_c or k.char(key, 'q') or self.standalone);
         if (k.char(key, '?')) {
             app.help = true;
@@ -949,6 +1001,7 @@ pub const Settings = struct {
         if (k.ctrl(key, 's')) return self.apply(app);
         if (k.char(key, 'u')) return self.undo(app);
         if (k.char(key, 'S')) return self.nextLayer(app);
+        if (self.section == providers_section and k.char(key, 'n')) return self.openPopup(app, .{});
         if (k.named(key, .page_down)) {
             self.preview_top += self.preview_page;
             return;
@@ -1012,7 +1065,18 @@ pub const Settings = struct {
         if (self.row >= rs.len) return;
         const row = rs[self.row];
         if (row == .provider) {
-            if (k.named(key, .enter)) return self.openPopup(app, row.provider);
+            const r = row.provider;
+            if (k.named(key, .enter)) return self.openPopup(app, r);
+            const i = r.index orelse return;
+            if (k.char(key, 'd')) return self.toggleDefault(app, i);
+            if (k.char(key, 'x')) {
+                if (arming == i) {
+                    self.remove_armed = null;
+                    return self.removeAt(app, i);
+                }
+                self.remove_armed = i;
+                return app.say("x again removes {s}; any other key keeps it", .{r.name});
+            }
             return;
         }
         if (row != .field) return;
