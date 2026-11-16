@@ -373,7 +373,7 @@ fn transcript(app: *App, a: std.mem.Allocator, rows: *transcript_mod.View, d: *c
         break :blk if (it.kind == .approval and !it.away and width >= approval_card.min_width) it else null;
     } else null;
     for (d.requests.items) |q| {
-        if (approval != null) break;
+        if (approval != null and std.mem.eql(u8, q.kind, "approval")) continue;
         // Its call's row shows it, open.
         const on_row = q.call.len > 0 and for (d.records.items) |*r| {
             if (r.kind == .tool and std.mem.eql(u8, r.tool.call, q.call)) break true;
@@ -410,14 +410,29 @@ fn transcript(app: *App, a: std.mem.Allocator, rows: *transcript_mod.View, d: *c
                 .{ .text = row.text, .role = if (row.header) .muted else .normal },
             }), .indent = if (row.header) 2 else 4, .revision = inbox_rev });
         }
+        if (approval != null) {
+            try out.append(a, try approvalBlock(app, a, it, app.answersHere(agent), width, inbox_rev));
+            return out.items;
+        }
         try out.append(a, .{ .spans = try spans(a, &.{
-            .{ .text = keys.itemHints(it), .role = .accent },
+            .{ .text = keys.itemHints(it), .role = .secondary },
             .{ .text = if (it.grant.len > 0) try std.fmt.allocPrint(a, "  · grant {s}", .{it.grant}) else "", .role = .muted },
             .{ .text = if (app.answersHere(agent) or it.away) "" else "  · ⇥ to answer here", .role = .muted },
         }), .indent = 2, .revision = inbox_rev });
     }
     if (out.items.len == 0) try out.append(a, .{ .spans = try spans(a, &.{.{ .text = if (d.stale) "loading…" else "No turns yet.", .role = .faint }}), .revision = rev });
     return out.items;
+}
+
+/// The inline approval as one card block on `crypt`.
+pub fn approvalBlock(app: *const App, a: std.mem.Allocator, it: *const inbox_mod.Item, answers_here: bool, width: u16, revision: u32) !w.Block {
+    var facts: std.ArrayList(approval_card.Fact) = .empty;
+    if (it.grant.len > 0) try facts.append(a, .{ .label = "grant", .value = it.grant });
+    if (it.title.len > 0) try facts.append(a, .{ .label = "agent", .value = it.title });
+    if (it.stale) try facts.append(a, .{ .label = "note", .value = "its harness process is gone" });
+    if (!answers_here) try facts.append(a, .{ .label = "note", .value = "⇥ to answer here" });
+    const ground: Style = .{ .bg = app.chrome.color(app.chrome.theme.crypt) };
+    return .{ .spans = try approval_card.spans(a, .{ .question = it.reason, .facts = facts.items }, width, ground), .revision = revision };
 }
 
 fn spans(a: std.mem.Allocator, s: []const w.Span) ![]const w.Span {

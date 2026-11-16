@@ -26,7 +26,7 @@ pub const Options = struct {
     focused: bool = false,
     /// Colours the title, e.g. `warn` for an attention marker.
     role: ?w.Role = null,
-    /// A number before the title, in the signal (`02 Agents`).
+    /// A number before the title, in the secondary text (`02 Agents`).
     number: []const u8 = "",
     /// Draws a `│` down the right edge.
     rule_right: bool = false,

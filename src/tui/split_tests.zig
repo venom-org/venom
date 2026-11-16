@@ -573,14 +573,14 @@ test "attention while handed over: Needs you, the split marked, Focus split inst
     try testing.expect(has(screen, "needs you"));
     // Inline in the transcript too: Focus split, and y is no answer.
     try testing.expect(has(screen, "focus split"));
-    try testing.expect(!has(screen, "y allow once"));
+    try testing.expect(!has(screen, "y once"));
 
     // On the inbox screen: Focus split instead of the inbox keys.
     _ = try app.feed(" i");
     screen = try render(&app, &surface, a);
     try testing.expect(has(screen, "Approve: Claude needs your permission"));
     try testing.expect(has(screen, "\\ focus split"));
-    try testing.expect(!has(screen, "y allow once"));
+    try testing.expect(!has(screen, "y once"));
     _ = try t.sent(a, &app);
     _ = try app.feed("yan1");
     try testing.expectEqualStrings("", try t.sent(a, &app));
@@ -785,8 +785,8 @@ test "agent view: answers its agent's approvals inline, by key and with a reason
     _ = try t.sent(a, &app);
     var screen = try render(&app, &surface, a);
     // The keys, in the split and in the status bar.
-    try testing.expect(has(screen, "y allow once  a always"));
-    try testing.expect(has(screen, "grant exec:zig"));
+    try testing.expect(has(screen, "y once  a always"));
+    try testing.expect(has(screen, "exec:zig"));
 
     // Pasted letters are not answers, nor quit, nor anything else.
     _ = try app.feed("\x1b[200~yq\x17\x1b[201~");
@@ -806,7 +806,7 @@ test "agent view: answers its agent's approvals inline, by key and with a reason
     try testing.expectEqualStrings("r8", params.get("request").?.string);
     try testing.expectEqualStrings("allow_once", params.get("answer").?.string);
     screen = try render(&app, &surface, a);
-    try testing.expect(has(screen, "grant exec:rm"));
+    try testing.expect(has(screen, "exec:rm"));
 
     // r asks for the reason in the split's own box; the main box stays.
     _ = try app.feed("r");
@@ -1328,7 +1328,7 @@ test "live: an agent-view split sends a prompt to its agent and answers its appr
 
     // Answered from its transcript, with the keys shown there.
     _ = try app.feed("\x1b");
-    try t.until(&app, &link, &surface, &d, "the approval's keys", t.Shows{ .text = "y allow once" });
+    try t.until(&app, &link, &surface, &d, "the approval's keys", t.Shows{ .text = "y once" });
     _ = try app.feed("y");
     try t.until(&app, &link, &surface, &d, "settled again", t.InState{ .id = other, .state = .settled });
     try t.until(&app, &link, &surface, &d, "the harness's answer", t.Shows{ .text = "built it" });

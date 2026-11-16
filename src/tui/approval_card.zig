@@ -6,7 +6,7 @@
 //! │ Run `zig build test` in the worktree?       │
 //! │ grant   bash:zig build *                    │
 //! │ agent   fix the frame limit                 │
-//! │ y once  a always  e edit  n no  esc back    │
+//! │ y once  a always  e edit  n no  r reason  s snooze  esc back │
 //! └─────────────────────────────────────────────┘
 //! ```
 //!
@@ -34,6 +34,8 @@ pub const default_answers = &[_]Answer{
     .{ .key = "a", .label = "always" },
     .{ .key = "e", .label = "edit" },
     .{ .key = "n", .label = "no" },
+    .{ .key = "r", .label = "reason" },
+    .{ .key = "s", .label = "snooze" },
     .{ .key = "esc", .label = "back" },
 };
 
@@ -92,7 +94,8 @@ fn cutAt(text: []const u8, room: usize) usize {
 }
 
 /// The card's spans for a block `width` cells wide (at least `min_width`).
-/// `ground` is the style that puts every cell on `crypt`.
+/// `ground` is the style that puts every cell on `crypt`. `a` must be an
+/// arena (a frame's): the spans point into memory it owns.
 pub fn spans(a: std.mem.Allocator, c: Content, width: usize, ground: term.Style) ![]const w.Span {
     std.debug.assert(width >= min_width);
     var b: Builder = .{ .a = a, .ground = ground, .width = width };
@@ -106,14 +109,12 @@ pub fn spans(a: std.mem.Allocator, c: Content, width: usize, ground: term.Style)
     try b.out.append(a, .{ .text = "┐", .role = .warn, .style = b.style(.{}) });
 
     // The question.
-    var rest = std.mem.trim(u8, c.question, " \n");
-    if (rest.len == 0) rest = "Allow this?";
-    while (rest.len > 0) {
-        const cut = cutAt(rest, inner);
+    var question = try wrap(a, c.question, inner);
+    if (question.len == 0) question = &.{"Allow this?"};
+    for (question) |line| {
         try b.open();
-        try b.put(std.mem.trimEnd(u8, rest[0..cut], " "), .normal, .{ .bold = true });
+        try b.put(line, .normal, .{ .bold = true });
         try b.close();
-        rest = std.mem.trimStart(u8, rest[cut..], " ");
     }
 
     // Facts: a muted key column, then the value.
@@ -122,18 +123,15 @@ pub fn spans(a: std.mem.Allocator, c: Content, width: usize, ground: term.Style)
     key_w = @min(key_w, inner / 3);
     for (c.facts) |f| {
         const room = inner -| (key_w + 2);
-        var value = f.value;
-        var first = true;
-        while (first or value.len > 0) {
-            const cut = cutAt(value, room);
+        const value_lines = try wrap(a, f.value, room);
+        const label = try clean(a, f.label);
+        for (value_lines, 0..) |line, i| {
             try b.open();
-            const label = if (first) f.label else "";
-            try b.put(label, .muted, .{});
-            try b.put(try repeat(a, " ", key_w + 2 -| w.text.width(label)), .normal, .{});
-            try b.put(std.mem.trimEnd(u8, value[0..cut], " "), .secondary, .{});
+            const shown = if (i == 0) label else "";
+            try b.put(shown, .muted, .{});
+            try b.put(try repeat(a, " ", key_w + 2 -| w.text.width(shown)), .normal, .{});
+            try b.put(line, .secondary, .{});
             try b.close();
-            value = std.mem.trimStart(u8, value[cut..], " ");
-            first = false;
         }
     }
 
@@ -159,6 +157,34 @@ pub fn spans(a: std.mem.Allocator, c: Content, width: usize, ground: term.Style)
     return b.out.items;
 }
 
+/// `text` with tabs and other control bytes as spaces (newlines stay).
+fn clean(a: std.mem.Allocator, text: []const u8) ![]u8 {
+    const out = try a.dupe(u8, text);
+    for (out) |*ch| if ((ch.* < 0x20 and ch.* != '\n') or ch.* == 0x7f) {
+        ch.* = ' ';
+    };
+    return out;
+}
+
+/// `text` as lines of at most `room` cells: one per newline, longer ones
+/// wrapped at spaces. Blank lines are kept; surrounding blank lines are not.
+fn wrap(a: std.mem.Allocator, text: []const u8, room: usize) ![]const []const u8 {
+    var out: std.ArrayList([]const u8) = .empty;
+    const all = std.mem.trim(u8, try clean(a, text), " \n");
+    if (all.len == 0) return out.items;
+    var parts = std.mem.splitScalar(u8, all, '\n');
+    while (parts.next()) |part| {
+        var rest = std.mem.trim(u8, part, " ");
+        if (rest.len == 0) try out.append(a, "");
+        while (rest.len > 0) {
+            const cut = cutAt(rest, room);
+            try out.append(a, std.mem.trimEnd(u8, rest[0..cut], " "));
+            rest = std.mem.trimStart(u8, rest[cut..], " ");
+        }
+    }
+    return out.items;
+}
+
 fn repeat(a: std.mem.Allocator, glyph: []const u8, n: usize) ![]const u8 {
     var out: std.ArrayList(u8) = .empty;
     for (0..n) |_| try out.appendSlice(a, glyph);
@@ -169,7 +195,7 @@ test "the card is a bordered block of equal-width lines" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
-    const width = 60;
+    const width = 64;
     const sp = try spans(a, .{
         .question = "Run a very long command that has to wrap over more than one line?",
         .facts = &.{ .{ .label = "grant", .value = "bash:zig build *" }, .{ .label = "agent", .value = "fix the frame limit" } },
@@ -191,5 +217,14 @@ test "the card is a bordered block of equal-width lines" {
     try w.text.wrap(std.testing.allocator, &wrapped, sp, width);
     try std.testing.expectEqual(n, wrapped.lines.items.len);
     try std.testing.expect(std.mem.startsWith(u8, last, "└"));
-    try std.testing.expect(std.mem.indexOf(u8, text.items, "y once  a always  e edit  n no  esc back") != null);
+
+    // Newlines and tabs in the question or a value stay inside the borders.
+    const sp2 = try spans(a, .{ .question = "First line\n\tsecond\x1b line", .facts = &.{.{ .label = "cmd", .value = "a\nb\tc" }} }, width, .{});
+    var text2: std.ArrayList(u8) = .empty;
+    for (sp2) |s| try text2.appendSlice(a, s.text);
+    var lines2 = std.mem.splitScalar(u8, text2.items, '\n');
+    var n2: usize = 0;
+    while (lines2.next()) |l| : (n2 += 1) try std.testing.expectEqual(@as(usize, width), w.text.width(l));
+    try std.testing.expectEqual(@as(usize, 7), n2);
+    try std.testing.expect(std.mem.indexOf(u8, text.items, "y once  a always  e edit  n no  r reason  s snooze  esc back") != null);
 }

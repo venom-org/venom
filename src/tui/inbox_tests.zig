@@ -434,7 +434,7 @@ test "inbox keys: every kind's actions, answer-and-advance, refused mixed batch,
     try app.preselect("a1");
     try view.render(&app, &surface);
     _ = try t.sent(a, &app);
-    try testing.expect(std.mem.indexOf(u8, try t.dump(a, &surface), "y allow once  a always  e edit") != null);
+    try testing.expect(std.mem.indexOf(u8, try t.dump(a, &surface), "y once  a always  e edit") != null);
     _ = try app.feed("r"); // deny with a reason, inline
     try view.render(&app, &surface);
     try testing.expect(std.mem.indexOf(u8, try t.dump(a, &surface), "┌ Deny with a reason") != null);
@@ -446,7 +446,7 @@ test "inbox keys: every kind's actions, answer-and-advance, refused mixed batch,
     try testing.expectEqual(@import("app.zig").Screen.main, app.screen);
     try testing.expectEqualStrings("a1", app.selected.items);
     try view.render(&app, &surface);
-    try testing.expect(std.mem.indexOf(u8, try t.dump(a, &surface), "y allow once  a always") == null);
+    try testing.expect(std.mem.indexOf(u8, try t.dump(a, &surface), "y once  a always") == null);
     // Nothing pending for a1 now: y is no longer an answer.
     _ = try app.feed("y");
     try testing.expect((try take(a, &app)) == null);
@@ -580,7 +580,7 @@ test "live: the inbox answers every kind against the fake harness, with answer-a
     _ = try app.feed("\x1b[H"); // Home: the most urgent item
     _ = try app.feed("o");
     try testing.expectEqualStrings("a7", app.selected.items);
-    try t.until(&app, &link, &surface, &d, "a7's inline keys", t.Shows{ .text = "y allow once  a always" });
+    try t.until(&app, &link, &surface, &d, "a7's inline keys", t.Shows{ .text = "y once  a always" });
     _ = try app.feed("a");
     try t.until(&app, &link, &surface, &d, "a7 settled", t.InState{ .id = "a7", .state = .settled });
     try heard(&d, a, "a7", "answer=allow_always");
