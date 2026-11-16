@@ -1,24 +1,24 @@
-╭ Agents ────── 0 live ╮╭ No agent ────────────────────────────────────────────╮
-│       ╭ Context window ────────────────────── venom-echo conformance ╮n      │
-│       │ ▰▰▰▰▰▰▱▱▱▱ 62%                                               │       │
-│       │ ~124k of 200k                                                │       │
-│       │                                                              │       │
-│       │ What fills it · estimated                                    │       │
-│       │ system + instructions                                    12k │       │
-│       │ tool definitions                                         18k │       │
-│       │ messages + tool results                                  61k │       │
-│       │ files read                                               33k │       │
-│       │                                                              │       │
-│       │ Largest items                                                │       │
-│       │ Read spec/vectors/all.json                               14k │       │
-│       │ Bash zig build                                            9k │       │
-│       │                                                              │       │
-│       │ MCP off: figma                                               │       │
-│       │                                                              │       │
-│       │ Actions                                                      │       │
-│       │ c  Compact now                                               │───────╯
-│       │ f  Fork to a fresh agent with a summary                      │───────╮
-│       │ m  Turn off MCP servers it hasn't used: linear, docs         │       │
-│       ╰──────────────────────────────────────────────────────────────╯▱▱▱▱ — │
-╰──────────────────────╯╰──────────────────────────────────────────────────────╯
- ▲ 0 need you · ◆ 0 running │ no agents │ NORMAL c compact  f fork  m MCP off  e
+ AGENTS ╭ Context window ────────────────────── venom-echo conformance ╮
+────────│ ▰▰▰▰▰▰▱▱▱▱ 62%                                               │────────
+ / filte│ ~124k of 200k                                                │
+        │                                                              │
+        │ What fills it · estimated                                    │
+        │ system + instructions                                    12k │
+        │ tool definitions                                         18k │
+        │ messages + tool results                                  61k │
+        │ files read                                               33k │
+        │                                                              │
+        │ Largest items                                                │
+        │ Read spec/vectors/all.json                               14k │
+        │ Bash zig build                                            9k │
+        │                                                              │
+        │ MCP off: figma                                               │
+        │                                                              │
+        │ Actions                                                      │
+        │ c  Compact now                                               │
+        │ f  Fork to a fresh agent with a summary                      │───────┐
+        │ m  Turn off MCP servers it hasn't used: linear, docs         │       │
+        ╰──────────────────────────────────────────────────────────────╯▱▱▱▱ — │
+                       │└──────────────────────────────────────────────────────┘
+ c compact   f fork   m MCP off   esc close
+ venom ◤ ▸agents                        │  NORMAL  │ ▲ 0 need you │ ◆ 0 running

@@ -17,6 +17,7 @@
 const std = @import("std");
 const term = @import("venom-term");
 const w = term.widgets;
+const pane = @import("pane.zig");
 const Surface = term.Surface;
 const Region = term.Region;
 const App = @import("app.zig").App;
@@ -34,7 +35,7 @@ pub fn render(app: *App, surface: *Surface, main: Region) !void {
     const g = try app.buildInboxGroups();
     try app.syncInbox(g);
     const items = try app.visibleItems();
-    const list_inner = try w.box.draw(surface, cols[0], theme, .{ .title = "Inbox", .badge = try std.fmt.allocPrint(a, "{d} item{s}", .{ items.len, if (items.len == 1) "" else "s" }), .focused = app.prompt == null });
+    const list_inner = try pane.draw(surface, cols[0], theme, .{ .rule_right = true, .title = "INBOX", .badge = try std.fmt.allocPrint(a, "{d} item{s}", .{ items.len, if (items.len == 1) "" else "s" }), .focused = app.prompt == null });
     if (items.len == 0) {
         _ = try w.text.drawText(surface, list_inner.x + 1, list_inner.y, list_inner.width -| 2, if (app.inbox.loaded) "Nothing needs you." else "loading…", .faint, theme, .{});
     } else try app.inbox_list.draw(surface, list_inner, g.groups, theme, app.prompt == null);
@@ -42,14 +43,14 @@ pub fn render(app: *App, surface: *Surface, main: Region) !void {
     const current = try app.currentItem();
     const parts = if (app.prompt != null) w.layout.stacked(cols[1], .{ .fixed = 3 }) else [2]Region{ cols[1], .{ .width = 0, .height = 0 } };
     const it = current orelse {
-        _ = try w.box.draw(surface, parts[0], theme, .{ .title = "Needs you" });
+        _ = try pane.draw(surface, parts[0], theme, .{ .title = "Needs you" });
         return;
     };
     var pos: usize = 0;
     for (items, 0..) |x, i| if (x == it) {
         pos = i + 1;
     };
-    const detail = try w.box.draw(surface, parts[0], theme, .{
+    const detail = try pane.draw(surface, parts[0], theme, .{
         .title = if (it.title.len > 0) it.title else it.agent,
         .badge = try std.fmt.allocPrint(a, "{s} · {d} of {d}", .{ it.kind.label(), pos, items.len }),
         .role = if (it.kind.blocking()) kindRole(it.kind) else null,
@@ -108,7 +109,7 @@ pub fn render(app: *App, surface: *Surface, main: Region) !void {
     try app.inbox_scroll.draw(app.gpa, surface, pad, blocks.items, theme, false);
 
     if (app.prompt) |p| {
-        const box = try w.box.draw(surface, parts[1], theme, .{ .title = p.mode.title(), .badge = it.agent, .focused = true });
+        const box = try w.box.draw(surface, parts[1], theme, .{ .border = .single, .title = p.mode.title(), .badge = it.agent, .focused = true });
         try app.answer_input.draw(surface, box, theme, true);
     }
 }

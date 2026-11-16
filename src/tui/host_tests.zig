@@ -158,12 +158,13 @@ test "the key table going is said once, and again only after it came back" {
     try testing.expect(f.host.notice() == null);
 }
 
-test "the missing-keys notice fits an 80-column bar whole and survives keys" {
+test "the missing-keys notice fits an 80-column hint row whole and survives keys" {
     var f: Fixture = undefined;
     try f.init();
     defer f.deinit();
     const a = f.arena.allocator();
-    // The longest place the bar shows, so only dropping it makes room.
+    // A long workspace in the bar: the notice is on the hint row, so it
+    // never competes with it.
     const agent = f.app.model.find(f.app.selected.items).?;
     testing.allocator.free(agent.workspace);
     agent.workspace = try testing.allocator.dupe(u8, "/somewhere/quite/deep/in/a/rather/long/workspace/path");
@@ -175,31 +176,31 @@ test "the missing-keys notice fits an 80-column bar whole and survives keys" {
 
     f.host.keys_missing = true;
     try view.render(&f.app, &surface);
-    try testing.expect(std.mem.indexOf(u8, try rowText(a, &surface, 23), host_mod.keys_notice) != null);
+    try testing.expect(std.mem.indexOf(u8, try rowText(a, &surface, 22), host_mod.keys_notice) != null);
     // A move, then a message: gone with the next key, and the notice is back.
     try f.app.handleKey(term.widgets.keys.testKey('j', .{}));
     try view.render(&f.app, &surface);
-    try testing.expect(std.mem.indexOf(u8, try rowText(a, &surface, 23), host_mod.keys_notice) != null);
+    try testing.expect(std.mem.indexOf(u8, try rowText(a, &surface, 22), host_mod.keys_notice) != null);
     f.app.say("something else", .{});
     try view.render(&f.app, &surface);
-    try testing.expect(std.mem.indexOf(u8, try rowText(a, &surface, 23), "something else") != null);
+    try testing.expect(std.mem.indexOf(u8, try rowText(a, &surface, 22), "something else") != null);
     try f.app.handleKey(term.widgets.keys.testKey('k', .{}));
     try view.render(&f.app, &surface);
-    try testing.expect(std.mem.indexOf(u8, try rowText(a, &surface, 23), host_mod.keys_notice) != null);
+    try testing.expect(std.mem.indexOf(u8, try rowText(a, &surface, 22), host_mod.keys_notice) != null);
     // Also from the other areas of the main screen.
     for (0..3) |i| {
         f.app.focus.set(i);
         try view.render(&f.app, &surface);
-        try testing.expect(std.mem.indexOf(u8, try rowText(a, &surface, 23), host_mod.keys_notice) != null);
+        try testing.expect(std.mem.indexOf(u8, try rowText(a, &surface, 22), host_mod.keys_notice) != null);
     }
     // A mode's own hints go first, and the notice comes back after it.
     f.app.focus.set(0);
     f.app.filtering = true;
     try view.render(&f.app, &surface);
-    try testing.expect(std.mem.indexOf(u8, try rowText(a, &surface, 23), host_mod.keys_notice) == null);
+    try testing.expect(std.mem.indexOf(u8, try rowText(a, &surface, 22), host_mod.keys_notice) == null);
     f.app.filtering = false;
     try view.render(&f.app, &surface);
-    try testing.expect(std.mem.indexOf(u8, try rowText(a, &surface, 23), host_mod.keys_notice) != null);
+    try testing.expect(std.mem.indexOf(u8, try rowText(a, &surface, 22), host_mod.keys_notice) != null);
 }
 
 test "a refused pane says so once and stops asking" {
@@ -915,7 +916,7 @@ test "host: venom's bar is the bottom row of its pane; a narrow one is list and 
     defer surface.deinit(&discard.writer);
     try view.render(&f.app, &surface);
     try testing.expect(std.mem.indexOf(u8, try rowText(a, &surface, 11), "need you") != null);
-    try testing.expect(std.mem.indexOf(u8, try rowText(a, &surface, 0), "Agents") != null);
+    try testing.expect(std.mem.indexOf(u8, try rowText(a, &surface, 0), "AGENTS") != null);
     // No input box in a list-only pane.
     for (0..11) |y| try testing.expect(std.mem.indexOf(u8, try rowText(a, &surface, @intCast(y)), "Input") == null);
     // i moves focus to the input box: the full view again.

@@ -42,6 +42,16 @@ pub const single_view_open = "open it from the control pane: this popup only rea
 
 pub const Screen = enum { main, inbox, workspaces, settings, usage };
 
+/// venom-term's widget roles, with focus kept out of the signal: a focused
+/// box or pane edge is `rule_strong`, not a border in blood. The signal
+/// stays for the status bar's block, the active view's `▸`, the selected
+/// row's `▌` and the prompt of an input being typed in.
+pub fn widgetTheme(chrome: term.theme.Chrome) w.Theme {
+    var t = chrome.widgets();
+    t.border_focus = chrome.text(chrome.theme.rule_strong);
+    return t;
+}
+
 /// Where keys go. A view only decides what the bare
 /// keys do. Only a key changes the mode, never a background event.
 pub const KeyMode = enum {
@@ -269,7 +279,7 @@ pub const App = struct {
     /// ask the system per instant, so DST is right.
     utc_offset_override: ?i32 = null,
     chrome: term.theme.Chrome = .{},
-    theme: w.Theme = .default,
+    theme: w.Theme = widgetTheme(.{}),
     /// Per-frame allocations (groups, spans).
     frame: std.heap.ArenaAllocator,
     /// Where the input box was last drawn (for clicks).
@@ -491,7 +501,7 @@ pub const App = struct {
 
     pub fn setTheme(self: *App, chrome: term.theme.Chrome) void {
         self.chrome = chrome;
-        self.theme = chrome.widgets();
+        self.theme = widgetTheme(chrome);
     }
 
     /// The colours a shell split is drawn on. Without truecolor they are the

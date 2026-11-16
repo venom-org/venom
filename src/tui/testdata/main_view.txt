@@ -1,30 +1,30 @@
-╭ Agents ────────────────── 4 live ╮╭ venom-echo conformance ─────────── ▲ needs you ╮╭ Agent ─────────────────────────╮
-│ ▾ Needs you  2                   ││ ── turn t1                                     ││ agent     a1                   │
-│▌▲ venom-echo conformance       1m││   I'll read the contract test vectors first,   ││ state     needs you            │
-│▌  claude-code · venom-std · appr…││   then add a conformance build step.           ││ harness   claude-code          │
-│ ✕ libghostty-vt spike         12m││ ▲ approval: Bash wants to run: zig build test  ││ turns     1                    │
-│   opencode · venom-term · failed ││ -Dconformance                                  ││ workspace ~/venom-org          │
-│ ▾ Running  1                     ││                                                ││ cwd       ~/venom-org/venom-s… │
-│ ◆ theme module trve/bone       3m││                                                ││                                │
-│   claude-code · venom-term · run…││                                                ││                                │
-│ ▾ Settled  1                     ││                                                ││                                │
-│ ● cfg ZON schema verbs        22m││                                                ││                                │
-│   codex · venom-std · settled    ││                                                ││                                │
-│ ▸ Archived  1                    ││                                                ││                                │
-│                                  ││                                                ││                                │
-│                                  ││                                                ││                                │
-│                                  ││                                                ││                                │
-│                                  ││                                                ││                                │
-│                                  ││                                                ││                                │
-│                                  ││                                                ││                                │
-│                                  ││                                                ││                                │
-│                                  ││                                                ││                                │
-│                                  ││                                                ││                                │
-│                                  ││                                                ││                                │
-│                                  ││                                                ││                                │
-│                                  │╰────────────────────────────────────────────────╯│                                │
-│                                  │╭ Input ──────────────────────────── claude-code ╮│                                │
-│                                  ││› Enter queues it, ⌥⏎ interrupts and sends      ││                                │
-│                                  ││ ask mode  opus …  ▰▰▰▰▰▰▱▱▱▱ 62% · 124k / 200k ││                                │
-╰──────────────────────────────────╯╰────────────────────────────────────────────────╯╰────────────────────────────────╯
- ▲ 2 need you · ◆ 1 running │ ~/venom-org │ NORMAL           ⏎ open  i input  n new  d diff  ! next  space more  ? keys
+ AGENTS       STATE WORKSPACE REPO │ venom-echo conformance              ▲ needs you │ AGENT
+───────────────────────────────────│─────────────────────────────────────────────────│──────────────────────────────────
+ / filter: harness, repo, … 4 live │ ── turn t1                                      │ TREE
+ ▾ NEEDS YOU  2 ───────────────────│   I'll read the contract test vectors first,    │ ▲ venom-echo conformance
+▌▲ venom-echo conformance        1m│   then add a conformance build step.            │──────────────────────────────────
+▌  claude-code · venom-std · appro…│ ▲ approval: Bash wants to run: zig build test   │ WORKTREE
+ ✕ libghostty-vt spike          12m│ -Dconformance                                   │ cwd        ~/venom-org/venom-std
+   opencode · venom-term · failed  │                                                 │ workspace            ~/venom-org
+ ▾ RUNNING  1 ─────────────────────│                                                 │ repos            whole workspace
+ ◆ theme module trve/bone        3m│                                                 │──────────────────────────────────
+   claude-code · venom-term · runn…│                                                 │ THIS AGENT
+ ▾ SETTLED  1 ─────────────────────│                                                 │ id                            a1
+ ● cfg ZON schema verbs         22m│                                                 │ state                  needs you
+   codex · venom-std · settled     │                                                 │ harness              claude-code
+ ▸ ARCHIVED  1 ────────────────────│                                                 │ model                   opus 5.5
+                                   │                                                 │ turns                          1
+                                   │                                                 │ context        62% · 124k / 200k
+                                   │                                                 │──────────────────────────────────
+                                   │                                                 │ LINKED
+                                   │                                                 │ issue                       none
+                                   │                                                 │ parent                      none
+                                   │                                                 │
+                                   │                                                 │
+                                   │                                                 │
+                                   │┌ Input ─────────────────────────── claude-code ┐│
+                                   ││› Enter queues it, ⌥⏎ interrupts and sends     ││
+                                   ││ ask mode  opus…  ▰▰▰▰▰▰▱▱▱▱ 62% · 124k / 200k ││
+                                   │└───────────────────────────────────────────────┘│
+ ⏎ open   i input   n new   d diff   ! next   space more   ? keys
+ venom ◤ ▸agents  inbox  workspaces  usage  settings      │  NORMAL  │ ▲ 2 need you │ ◆ 1 running │ ~/venom-org │ 15:30

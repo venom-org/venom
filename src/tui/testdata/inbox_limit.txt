@@ -1,30 +1,30 @@
-╭ Inbox ────────────────────────────── 2 items ╮╭ libghostty-vt spike ───────────────────────────────── Limit · 1 of 2 ╮
-│ ▾ Failed  2                                  ││ ✕ Limit: usage limit hit  · resets at 17:00                          │
-│▌✕ Limit: usage limit hit                   5m││                                                                      │
-│▌  libghostty-vt spike · a2 · opencode        ││ R retry  o open  s snooze  o open  \ split                           │
-│ ✕ Limit: weekly limit hit                 10s││ m mark · Y / N answer marked approvals that share one grant          │
-│   cfg ZON schema verbs · a4 · codex          ││                                                                      │
-│                                              ││                                                                      │
-│                                              ││                                                                      │
-│                                              ││                                                                      │
-│                                              ││                                                                      │
-│                                              ││                                                                      │
-│                                              ││                                                                      │
-│                                              ││                                                                      │
-│                                              ││                                                                      │
-│                                              ││                                                                      │
-│                                              ││                                                                      │
-│                                              ││                                                                      │
-│                                              ││                                                                      │
-│                                              ││                                                                      │
-│                                              ││                                                                      │
-│                                              ││                                                                      │
-│                                              ││                                                                      │
-│                                              ││                                                                      │
-│                                              ││                                                                      │
-│                                              ││                                                                      │
-│                                              ││                                                                      │
-│                                              ││                                                                      │
-│                                              ││                                                                      │
-╰──────────────────────────────────────────────╯╰──────────────────────────────────────────────────────────────────────╯
- ▲ 2 need you · ◆ 1 running │ ~/venom-org │ NORMAL                          R retry  o open  s snooze  esc back  ? keys
+ INBOX                                 2 items │ libghostty-vt spike                                     Limit · 1 of 2
+───────────────────────────────────────────────│────────────────────────────────────────────────────────────────────────
+ ▾ Failed  2                                   │ ✕ Limit: usage limit hit  · resets at 17:00
+▌✕ Limit: usage limit hit                    5m│
+▌  libghostty-vt spike · a2 · opencode         │ R retry  o open  s snooze  o open  \ split
+ ✕ Limit: weekly limit hit                  10s│ m mark · Y / N answer marked approvals that share one grant
+   cfg ZON schema verbs · a4 · codex           │
+                                               │
+                                               │
+                                               │
+                                               │
+                                               │
+                                               │
+                                               │
+                                               │
+                                               │
+                                               │
+                                               │
+                                               │
+                                               │
+                                               │
+                                               │
+                                               │
+                                               │
+                                               │
+                                               │
+                                               │
+                                               │
+ R retry   o open   s snooze   esc back   ? keys
+ venom ◤ agents  ▸inbox 2  workspaces  usage  settings    │  NORMAL  │ ▲ 2 need you │ ◆ 1 running │ ~/venom-org │ 16:30

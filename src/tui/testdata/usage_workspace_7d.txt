@@ -1,14 +1,14 @@
-╭ Usage ────────────────────────────────────────────────────────────────────────────────── 7d · by workspace ╮
-│ 1 today  2 7d  3 30d    g workspace  agent  harness                                                        │
-│ All agents  in 1.5M  out 393k  cache 15.4M / 197k  4 turns  59 tools  2h 19m                               │
-│                                                                                                            │
-│ Workspace                                          Agents     In    Out      Cache r/w Turns Tools    Wall │
-│▌/work/std                                               1   1.2M   300k     12M / 150k     1    40  2h 13m │
-│ /work/venom                                             2   339k    93k     3.4M / 47k     3    19  5m 50s │
-│                                                                                                            │
-│                                                                                                            │
-│                                                                                                            │
-│                                                                                                            │
-│                                                                                                            │
-╰────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
- ▲ 0 need you · ◆ 0 running │ no agents │ NORMAL                        1 2 3 range  g group  e csv  esc back
+ USAGE                                                                                      7d · by workspace
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ 1 today  2 7d  3 30d    g workspace  agent  harness
+ All agents  in 1.5M  out 393k  cache 15.4M / 197k  4 turns  59 tools  2h 19m
+
+ Workspace                                            Agents     In    Out      Cache r/w Turns Tools    Wall
+▌/work/std                                                 1   1.2M   300k     12M / 150k     1    40  2h 13m
+ /work/venom                                               2   339k    93k     3.4M / 47k     3    19  5m 50s
+
+
+
+
+ 1 2 3 range   g group   e csv   esc back
+ venom ◤ agents  inbox  workspaces  ▸usage  settings                  │  NORMAL  │ ▲ 0 need you │ ◆ 0 running

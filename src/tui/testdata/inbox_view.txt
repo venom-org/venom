@@ -1,30 +1,30 @@
-╭ Inbox ────────────────────────────── 8 items ╮╭ proto v2 framing review ────────────────────────── Question · 4 of 8 ╮
-│ ▾ Blocking · agent stopped  5                ││ Context · last turns                                                 │
-│ ▲ Approve: Bash wants to run: zig build t… 1m││   The doc says frames are length-prefixed with a u32; venom-std      │
-│   venom-echo conformance · a1 · exec:zig     ││   decodes LEB128 varints.                                            │
-│ ▲ Approve: Bash wants to run: zig build   50s││                                                                      │
-│   proto fuzzing · a6 · exec:zig              ││ ▲ Question: Which framing should proto v2 specify?                   │
-│ ▲ Approve: Bash wants to run: rm -rf zig… 40s││     1 u32 length prefix                                              │
-│   clean build dir · a7 · exec:rm             ││     2 LEB128 varint                                                  │
-│▌▲ Question: Which framing should proto v2… 4m││     3 Keep both, negotiated                                          │
-│▌  proto v2 framing review · a8               ││                                                                      │
-│ ▲ Plan: split proto.Frame into frame and… 30s││ 1–9 pick  ⏎ type an answer  s snooze  o open  \ split                │
-│   proto split · a9                           ││ m mark · Y / N answer marked approvals that share one grant          │
-│ ▾ Failed  2                                  ││                                                                      │
-│ ✕ Failed: zig build exited 1              12m││                                                                      │
-│   libghostty-vt spike · a2 · opencode        ││                                                                      │
-│ ✕ Limit: usage limit hit                   5m││                                                                      │
-│   docs pass · a10                            ││                                                                      │
-│ ▾ To review · not blocking  1                ││                                                                      │
-│ ● Review: finished, unread                22m││                                                                      │
-│   cfg ZON schema verbs · a4 · codex          ││                                                                      │
-│                                              ││                                                                      │
-│                                              ││                                                                      │
-│                                              ││                                                                      │
-│                                              ││                                                                      │
-│                                              ││                                                                      │
-│                                              ││                                                                      │
-│                                              ││                                                                      │
-│                                              ││                                                                      │
-╰──────────────────────────────────────────────╯╰──────────────────────────────────────────────────────────────────────╯
- ▲ 2 need you · ◆ 1 running │ ~/venom-org │ NORMAL               1–9 pick  ⏎ type an answer  s snooze  esc back  ? keys
+ INBOX                                 8 items │ proto v2 framing review                              Question · 4 of 8
+───────────────────────────────────────────────│────────────────────────────────────────────────────────────────────────
+ ▾ Blocking · agent stopped  5                 │ Context · last turns
+ ▲ Approve: Bash wants to run: zig build te… 1m│   The doc says frames are length-prefixed with a u32; venom-std
+   venom-echo conformance · a1 · exec:zig      │   decodes LEB128 varints.
+ ▲ Approve: Bash wants to run: zig build    50s│
+   proto fuzzing · a6 · exec:zig               │ ▲ Question: Which framing should proto v2 specify?
+ ▲ Approve: Bash wants to run: rm -rf zig-… 40s│     1 u32 length prefix
+   clean build dir · a7 · exec:rm              │     2 LEB128 varint
+▌▲ Question: Which framing should proto v2 … 4m│     3 Keep both, negotiated
+▌  proto v2 framing review · a8                │
+ ▲ Plan: split proto.Frame into frame and … 30s│ 1–9 pick  ⏎ type an answer  s snooze  o open  \ split
+   proto split · a9                            │ m mark · Y / N answer marked approvals that share one grant
+ ▾ Failed  2                                   │
+ ✕ Failed: zig build exited 1               12m│
+   libghostty-vt spike · a2 · opencode         │
+ ✕ Limit: usage limit hit                    5m│
+   docs pass · a10                             │
+ ▾ To review · not blocking  1                 │
+ ● Review: finished, unread                 22m│
+   cfg ZON schema verbs · a4 · codex           │
+                                               │
+                                               │
+                                               │
+                                               │
+                                               │
+                                               │
+                                               │
+ 1–9 pick   ⏎ type an answer   s snooze   esc back   ? keys
+ venom ◤ agents  ▸inbox 8  workspaces  usage  settings    │  NORMAL  │ ▲ 2 need you │ ◆ 1 running │ ~/venom-org │ 15:30

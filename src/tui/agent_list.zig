@@ -34,6 +34,7 @@
 const std = @import("std");
 const term = @import("venom-term");
 const w = term.widgets;
+const pane = @import("pane.zig");
 const k = w.keys;
 const Surface = term.Surface;
 const Region = term.Region;
@@ -512,13 +513,20 @@ pub const View = struct {
             try gutter(surface, region.x, y, mark_cursor, fill, theme);
             switch (rows[i]) {
                 .header => |h| {
+                    // `▾ NEEDS YOU  2 ─────`: the label, its count and a
+                    // hairline to the edge.
                     var count_buf: [24]u8 = undefined;
-                    _ = try w.text.drawSpans(surface, x, y, width, &.{
-                        .{ .text = if (h.folded) "▸ " else "▾ ", .role = .muted },
-                        .{ .text = h.title, .role = .muted, .style = .{ .bold = true } },
-                        .{ .text = "  ", .role = .muted },
-                        .{ .text = std.fmt.bufPrint(&count_buf, "{d}", .{h.count}) catch "", .role = .muted },
-                    }, theme, opts);
+                    // State groups are labels, uppercase; a workspace or
+                    // repo is a name and keeps its case.
+                    var label_buf: [32]u8 = undefined;
+                    const is_state = for (state_titles ++ [_][]const u8{archived_title}) |t| {
+                        if (std.mem.eql(u8, t, h.title)) break true;
+                    } else false;
+                    const label = if (is_state and h.title.len <= label_buf.len) std.ascii.upperString(label_buf[0..h.title.len], h.title) else h.title;
+                    var no_fill = opts;
+                    no_fill.fill = null;
+                    const used = try w.text.drawText(surface, x, y, width, if (h.folded) "▸ " else "▾ ", .muted, theme, no_fill);
+                    try pane.groupHeader(surface, x + used, y, width -| used, label, std.fmt.bufPrint(&count_buf, "{d}", .{h.count}) catch "", theme, opts);
                 },
                 .summary => |s| {
                     var spans: [2 + summary_order.len * 2]w.Span = undefined;

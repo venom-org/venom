@@ -99,15 +99,28 @@ const Fixture = struct {
     }
 };
 
-/// The transcript's column of a drawn screen, without its right border.
+/// The transcript's column of a drawn screen: right of the list's rule,
+/// between the pane's hairline and the input box. The rule's column comes
+/// from the hairline row, where it is the only `│`; list rows can hold
+/// tree lines, so other rows are cut at that column, not at their first `│`.
 fn column(a: std.mem.Allocator, screen: []const u8) ![]const u8 {
     var out: std.ArrayList(u8) = .empty;
+    var rule: ?usize = null;
     var it = std.mem.splitScalar(u8, screen, '\n');
     while (it.next()) |l| {
-        if (std.mem.indexOf(u8, l, "│╭") != null) break;
-        const start = std.mem.indexOf(u8, l, "││") orelse continue;
-        const body = std.mem.trimEnd(u8, l[start + "││".len ..], " │");
-        try out.appendSlice(a, body);
+        if (rule == null) {
+            if (!std.mem.startsWith(u8, l, "─")) continue;
+            const at = std.mem.indexOf(u8, l, "│") orelse continue;
+            rule = try std.unicode.utf8CountCodepoints(l[0..at]);
+            continue;
+        }
+        var utf8 = try std.unicode.Utf8View.init(l);
+        var cps = utf8.iterator();
+        var n: usize = 0;
+        while (n <= rule.? and cps.nextCodepointSlice() != null) n += 1;
+        const body = l[cps.i..];
+        if (std.mem.startsWith(u8, body, "┌")) break;
+        try out.appendSlice(a, std.mem.trimEnd(u8, body, " "));
         try out.append(a, '\n');
     }
     return std.mem.trimEnd(u8, out.items, "\n");
@@ -123,18 +136,18 @@ test "fan-out block: one card per child in mixed states, with last activity and 
     defer f.deinit();
     const a = f.arena.allocator();
     try testing.expectEqualStrings(
-        \\ ⑂ Fan-out: 5 agents               ▲ 1  ✕ 1  ◆ 2  ● 1
-        \\ ▾ ⑂ venom-std claude-code             ● settled · 1m
+        \\ ⑂ Fan-out: 5 agents                 ▲ 1  ✕ 1  ◆ 2  ● 1
+        \\ ▾ ⑂ venom-std claude-code               ● settled · 1m
         \\     last: Bash  zig build test
         \\     result: PR #31 opened …
-        \\ ▾ ⑂ venomx  codex                   ▲ needs you · 1m
+        \\ ▾ ⑂ venomx  codex                     ▲ needs you · 1m
         \\     last: Bash  zig build test
         \\     ▲ write outside the worktree
-        \\ ▾ ⑂ venom-docs claude-code · ▲ 1 be…  ◆ running · 1m
+        \\ ▾ ⑂ venom-docs claude-code · ▲ 1 below  ◆ running · 1m
         \\     last: Bash  zig build test
-        \\ ▾ ⑂ venom-term claude-code             ✕ failed · 1m
+        \\ ▾ ⑂ venom-term claude-code               ✕ failed · 1m
         \\     ✕ turn failed
-        \\ ▾ · explore-vectors claude-code · n…  ◆ running · 1m
+        \\ ▾ · explore-vectors claude-code · nat…  ◆ running · 1m
         \\   ] open child  \ split view  w wait for all  K stop
         \\   all  P promote
     , try column(a, try f.draw()));
@@ -174,7 +187,7 @@ test "[ and ]: ] goes to the child that needs you, the header's breadcrumb follo
     _ = try f.draw();
     _ = try f.app.feed("]");
     try testing.expectEqualStrings("c2", f.app.selected.items);
-    try testing.expect(contains(try f.draw(), "╭ rename proto.Frame › venomx ─"));
+    try testing.expect(contains(try f.draw(), "│ rename proto.Frame › venomx "));
 
     // A leaf has no child to go to, and the row says so.
     _ = try f.app.feed("]");
@@ -183,7 +196,7 @@ test "[ and ]: ] goes to the child that needs you, the header's breadcrumb follo
 
     _ = try f.app.feed("[");
     try testing.expectEqualStrings("p1", f.app.selected.items);
-    try testing.expect(contains(try f.draw(), "╭ rename proto.Frame ─"));
+    try testing.expect(contains(try f.draw(), "│ rename proto.Frame  "));
     _ = try f.app.feed("[");
     try testing.expectEqualStrings("p1", f.app.selected.items);
     try testing.expectEqualStrings("p1 is a top-level agent", f.app.message.items);
@@ -200,7 +213,7 @@ test "[ and ]: ] goes to the child that needs you, the header's breadcrumb follo
 
     // A grandchild: two steps in the breadcrumb, older ones go first when narrow.
     try f.app.setSelected("g1");
-    try testing.expect(contains(try f.draw(), "╭ … › venom-docs › refactor ─"));
+    try testing.expect(contains(try f.draw(), "│ … › venom-docs › refactor  "));
     try testing.expectEqualStrings("rename proto.Frame › venom-docs › refactor", try fan_out.breadcrumb(&f.app, a, f.app.model.find("g1").?, 60));
     try testing.expectEqualStrings("… › venom-docs › refactor", try fan_out.breadcrumb(&f.app, a, f.app.model.find("g1").?, 30));
     try testing.expectEqualStrings("… › refactor", try fan_out.breadcrumb(&f.app, a, f.app.model.find("g1").?, 5));
@@ -293,9 +306,9 @@ test "a native child shows the steer message instead of an input box, and takes 
     try f.app.setSelected("n1");
     _ = try t.sent(a, &f.app);
     const screen = try f.draw();
-    try testing.expect(contains(screen, "╭ Owned by claude-code "));
+    try testing.expect(contains(screen, "┌ Owned by claude-code "));
     try testing.expect(contains(screen, "Message the parent to steer it."));
-    try testing.expect(!contains(screen, "╭ Input "));
+    try testing.expect(!contains(screen, "┌ Input "));
     f.app.focus.set(2);
     _ = try f.app.feed("hi\r");
     try testing.expectEqualStrings("", f.app.input.value());

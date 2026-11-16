@@ -145,15 +145,18 @@ test "main view snapshot matches testdata/main_view.txt" {
     if (!std.mem.eql(u8, want, got)) std.debug.print("main view:\n{s}\n", .{got});
     try testing.expectEqualStrings(want, got);
 
-    // `▲ 1 need you` is filled gold (reverse video in ANSI 16) while
-    // something blocks; the needs-you glyph is warn, never colour alone.
-    const bar = surface.get(1, 29).?;
-    try testing.expectEqualStrings("▲", bar.text);
-    try testing.expect(bar.style.reverse);
-    try testing.expectEqual(app.chrome.theme.gold.ansi, bar.style.fg);
-    const plain = surface.get(20, 29).?;
-    try testing.expect(!plain.style.reverse);
-    try testing.expectEqual(app.theme.warn.fg, surface.get(2, 2).?.style.fg);
+    // `▲ N need you` is warn and bold on the bar's ground while something
+    // blocks; the needs-you glyph is warn, never colour alone.
+    const bar_glyph = for (0..surface.width) |x| {
+        const cell = surface.get(@intCast(x), 29).?;
+        if (std.mem.eql(u8, cell.text, "▲")) break cell;
+    } else return error.TestUnexpectedResult;
+    try testing.expectEqual(app.chrome.theme.gold.ansi, bar_glyph.style.fg);
+    try testing.expect(bar_glyph.style.bold and !bar_glyph.style.reverse);
+    try testing.expectEqual(app.chrome.statusBar().bg, bar_glyph.style.bg);
+    // The list's first agent: its glyph in warn, under the header, the
+    // hairline, the filter row and the group's header.
+    try testing.expectEqual(app.theme.warn.fg, surface.get(1, 4).?.style.fg);
 
     // At 80 columns the inspector goes; the status bar stays at the bottom.
     try surface.resize(80, 24);
@@ -165,8 +168,9 @@ test "main view snapshot matches testdata/main_view.txt" {
     while (rows.next()) |r| : (n += 1) if (n == 23) {
         last = r;
     };
-    try testing.expect(std.mem.startsWith(u8, last, " ▲ 2 need you · ◆ 1 running │ ~/venom-org │ NORMAL"));
-    try testing.expect(std.mem.indexOf(u8, small, "╭ Agent ") == null);
+    try testing.expect(std.mem.startsWith(u8, last, " venom ◤ ▸agents "));
+    for ([_][]const u8{ " NORMAL ", "▲ 2 need you", "◆ 1 running" }) |part| try testing.expect(std.mem.indexOf(u8, last, part) != null);
+    try testing.expect(std.mem.indexOf(u8, small, "│ AGENT") == null);
 }
 
 test "keys: every key is a verb request or a local action" {
@@ -217,7 +221,7 @@ test "keys: every key is a verb request or a local action" {
     try view.render(&app, &surface);
     const typing = try dump(a, &surface);
     try testing.expect(std.mem.indexOf(u8, typing, "› fix x") != null);
-    try testing.expect(std.mem.indexOf(u8, typing, "│ INPUT") != null);
+    try testing.expect(std.mem.indexOf(u8, typing, "│  INPUT") != null);
     _ = try app.feed("\r");
     const send_line = app.outbox.items[0];
     try testing.expect(std.mem.indexOf(u8, send_line, "\"text\":\"fix x\"") != null);
@@ -235,7 +239,7 @@ test "keys: every key is a verb request or a local action" {
     const help = try dump(a, &surface);
     try testing.expect(std.mem.indexOf(u8, help, "╭ Keys ") != null);
     try testing.expect(std.mem.indexOf(u8, help, "venom agent archive") != null);
-    try testing.expect(std.mem.indexOf(u8, help, "│ NORMAL") != null);
+    try testing.expect(std.mem.indexOf(u8, help, "│  NORMAL") != null);
     _ = try app.feed("x");
     try testing.expect(!app.help);
     try testing.expectEqualStrings("a1", app.selected.items);
@@ -520,7 +524,7 @@ test "live: the TUI renders from events against the fake harness, drives verbs w
     // An agent that asks for approval: Needs you, and `▲ 1 need you`.
     _ = try d.run(a, &.{ "agent", "spawn", task, "--task=ask to build", "--harness=fake" });
     try until(&app, &link, &surface, &d, "a2 needs you", InState{ .id = "a2", .state = .needs_you });
-    try until(&app, &link, &surface, &d, "the bar's count", Shows{ .text = " ▲ 1 need you · ◆ 0 running" });
+    try until(&app, &link, &surface, &d, "the bar's count", Shows{ .text = "▲ 1 need you │ ◆ 0 running" });
 
     // Keys drive verbs. The selection stayed on a1 while a2 arrived above
     // it (Needs you comes first); k and j move between them.

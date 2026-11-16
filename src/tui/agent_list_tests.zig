@@ -92,11 +92,11 @@ test "group by state: Needs you, Running, Settled, then one folded Archived line
     try f.init();
     defer f.deinit();
     try testing.expectEqualStrings(
-        \\ ▾ Needs you  1
+        \\ ▾ NEEDS YOU  1 ───────────────────────────
         \\ ▲ venom-echo conformance                1m
         \\   claude · venom-std · 1 sub · approve: z…
         \\   └· ◆ explore-vectors                  1m
-        \\ ▾ Running  2
+        \\ ▾ RUNNING  2 ─────────────────────────────
         \\ ◆ sort warnings                         1m
         \\   codex · scratch · running
         \\ ◆ rename proto.Frame               ▲ 2  1m
@@ -105,10 +105,10 @@ test "group by state: Needs you, Running, Settled, then one folded Archived line
         \\   ├⑂ ▲ venomx                           1m
         \\   └⑂ ◆ venom-docs                  ▲ 1  1m
         \\     └⑂ ✕ refactor                       1m
-        \\ ▾ Settled  1
+        \\ ▾ SETTLED  1 ─────────────────────────────
         \\ ● cfg schema verbs                      1m
         \\   codex · venom-std · settled
-        \\ ▸ Archived  1
+        \\ ▸ ARCHIVED  1 ────────────────────────────
     , try f.draw());
 }
 
@@ -119,10 +119,10 @@ test "group by workspace, then repo: g cycles and rows stay sorted by urgency" {
     try f.feed("g");
     try testing.expectEqualStrings("group by: workspace", f.app.message.items);
     try testing.expectEqualStrings(
-        \\ ▾ ~/scratch  1
+        \\ ▾ ~/scratch  1 ───────────────────────────
         \\ ◆ sort warnings                         1m
         \\   codex · scratch · running
-        \\ ▾ ~/venom-org  3
+        \\ ▾ ~/venom-org  3 ─────────────────────────
         \\ ▲ venom-echo conformance                1m
         \\   claude · venom-std · 1 sub · approve: z…
         \\   └· ◆ explore-vectors                  1m
@@ -134,27 +134,27 @@ test "group by workspace, then repo: g cycles and rows stay sorted by urgency" {
         \\     └⑂ ✕ refactor                       1m
         \\ ● cfg schema verbs                      1m
         \\   codex · venom-std · settled
-        \\ ▸ Archived  1
+        \\ ▸ ARCHIVED  1 ────────────────────────────
     , try f.draw());
     try f.feed("g");
     try testing.expectEqualStrings(
-        \\ ▾ venom-std  2
+        \\ ▾ venom-std  2 ───────────────────────────
         \\ ▲ venom-echo conformance                1m
         \\   claude · venom-std · 1 sub · approve: z…
         \\   └· ◆ explore-vectors                  1m
         \\ ● cfg schema verbs                      1m
         \\   codex · venom-std · settled
-        \\ ▾ ~/scratch  1
+        \\ ▾ ~/scratch  1 ───────────────────────────
         \\ ◆ sort warnings                         1m
         \\   codex · scratch · running
-        \\ ▾ ~/venom-org (multi-repo)  1
+        \\ ▾ ~/venom-org (multi-repo)  1 ────────────
         \\ ◆ rename proto.Frame               ▲ 2  1m
         \\   claude · 3 repos · 4 sub · running
         \\   ├⑂ ● venom-std                        1m
         \\   ├⑂ ▲ venomx                           1m
         \\   └⑂ ◆ venom-docs                  ▲ 1  1m
         \\     └⑂ ✕ refactor                       1m
-        \\ ▸ Archived  1
+        \\ ▸ ARCHIVED  1 ────────────────────────────
     , try f.draw());
     try f.feed("g");
     try testing.expectEqual(.state, f.app.group_by);
@@ -167,20 +167,20 @@ test "children folded: one summary line, the count covers all levels" {
     try f.feed("t");
     try testing.expectEqualStrings("sub-agents: folded", f.app.message.items);
     try testing.expectEqualStrings(
-        \\ ▾ Needs you  1
+        \\ ▾ NEEDS YOU  1 ───────────────────────────
         \\ ▲ venom-echo conformance                1m
         \\   claude · venom-std · 1 sub · approve: z…
         \\   └· 1 child · ◆1
-        \\ ▾ Running  2
+        \\ ▾ RUNNING  2 ─────────────────────────────
         \\ ◆ sort warnings                         1m
         \\   codex · scratch · running
         \\ ◆ rename proto.Frame               ▲ 2  1m
         \\   claude · 3 repos · 4 sub · running
         \\   └⑂ 4 children · ●1 ◆1 ✕1 ▲1
-        \\ ▾ Settled  1
+        \\ ▾ SETTLED  1 ─────────────────────────────
         \\ ● cfg schema verbs                      1m
         \\   codex · venom-std · settled
-        \\ ▸ Archived  1
+        \\ ▸ ARCHIVED  1 ────────────────────────────
     , try f.draw());
 }
 
@@ -191,18 +191,18 @@ test "children hidden: the bubbled count is the only trace, and only while one n
     const a = f.arena.allocator();
     try f.feed("tt");
     try testing.expectEqualStrings(
-        \\ ▾ Needs you  1
+        \\ ▾ NEEDS YOU  1 ───────────────────────────
         \\ ▲ venom-echo conformance                1m
         \\   claude · venom-std · approve: zig build…
-        \\ ▾ Running  2
+        \\ ▾ RUNNING  2 ─────────────────────────────
         \\ ◆ sort warnings                         1m
         \\   codex · scratch · running
         \\ ◆ rename proto.Frame               ▲ 2  1m
         \\   claude · 3 repos · running
-        \\ ▾ Settled  1
+        \\ ▾ SETTLED  1 ─────────────────────────────
         \\ ● cfg schema verbs                      1m
         \\   codex · venom-std · settled
-        \\ ▸ Archived  1
+        \\ ▸ ARCHIVED  1 ────────────────────────────
     , try f.draw());
     // Bubbling reaches every ancestor; answered, the trace goes.
     try t.feedJson(&f.app, a, "{\"seq\":41,\"ts\":\"2026-11-06T14:31:00.000Z\",\"source\":\"venom/0e1\",\"type\":\"agent.state_changed\",\"data\":{\"agent\":\"c2\",\"from\":\"needs_you\",\"to\":\"running\"}}");
@@ -222,7 +222,7 @@ test "filter: / narrows on title, harness, repo and issue; ancestors stay; esc c
     try f.feed("/refac");
     try testing.expect(f.app.filtering);
     try testing.expectEqualStrings(
-        \\ ▾ Running  1
+        \\ ▾ RUNNING  1 ─────────────────────────────
         \\ ◆ rename proto.Frame               ▲ 2  1m
         \\   claude · 3 repos · 4 sub · running
         \\   └⑂ ◆ venom-docs                  ▲ 1  1m
@@ -248,10 +248,10 @@ test "filter: / narrows on title, harness, repo and issue; ancestors stay; esc c
     try f.feed("scratch\r");
     try testing.expect(!f.app.filtering);
     try testing.expectEqualStrings(
-        \\ ▾ Running  1
+        \\ ▾ RUNNING  1 ─────────────────────────────
         \\ ◆ sort warnings                         1m
         \\   codex · scratch · running
-        \\ ▸ Archived  1
+        \\ ▸ ARCHIVED  1 ────────────────────────────
     , try f.draw());
     try f.feed("g");
     try testing.expectEqual(.workspace, f.app.group_by);
@@ -280,9 +280,9 @@ test "main view shows the filter line, the no-match line and INPUT in the bar" {
     try f.feed("/nope");
     try view.render(&f.app, &surface);
     const screen = try t.dump(a, &surface);
-    try testing.expect(std.mem.indexOf(u8, screen, "│ / nope") != null);
+    try testing.expect(std.mem.indexOf(u8, screen, "\n / nope") != null);
     try testing.expect(std.mem.indexOf(u8, screen, "No agent matches.") != null);
-    try testing.expect(std.mem.indexOf(u8, screen, "│ INPUT") != null);
+    try testing.expect(std.mem.indexOf(u8, screen, "│  INPUT") != null);
     // A paste can't close it or send anything.
     try f.feed("\x1b[200~a\rb\x1b[201~");
     try testing.expect(f.app.filtering);
@@ -350,9 +350,9 @@ test "folds: per group, kept across regrouping; Archived starts folded and opens
     try f.feed("h");
     try testing.expect(f.app.on_header);
     try f.feed("h");
-    try testing.expect(std.mem.indexOf(u8, try f.draw(), "▸ Needs you  1") != null);
+    try testing.expect(std.mem.indexOf(u8, try f.draw(), "▸ NEEDS YOU  1") != null);
     try f.feed("l");
-    try testing.expect(std.mem.indexOf(u8, try f.draw(), "▾ Needs you  1") != null);
+    try testing.expect(std.mem.indexOf(u8, try f.draw(), "▾ NEEDS YOU  1") != null);
 }
 
 test "the model keeps parent links: agent.created, agent.promoted and a new snapshot" {

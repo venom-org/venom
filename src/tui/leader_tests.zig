@@ -219,7 +219,7 @@ test "leader: cancels, goes up a level, and swallows what it does not know" {
     try testing.expect(!app.leader.pending());
     // Its bar says so, and it is still Normal.
     try f.feed(" ");
-    try testing.expect(has(try f.screen(), "NORMAL · LEADER"));
+    try testing.expect(has(try f.screen(), "NORMAL   LEADER"));
     // The leader twice is the switcher's; it never reaches a key.
     try f.feed(" ");
     try testing.expect(!app.leader.pending());

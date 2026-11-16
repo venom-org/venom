@@ -19,6 +19,7 @@ const Region = term.Region;
 const App = @import("app.zig").App;
 const settings = @import("settings.zig");
 const zon_text = @import("zon_text.zig");
+const pane = @import("pane.zig");
 
 const nav_w = 28;
 const preview_w = 52;
@@ -45,7 +46,7 @@ pub fn render(app: *App, surface: *Surface, main: Region) !void {
         const parts = w.layout.stacked(center, .{ .fixed = 3 });
         center = parts[0];
         const f = s.editing.?;
-        const box = try w.box.draw(surface, parts[1], &app.theme, .{ .title = f.label, .badge = f.key, .focused = true });
+        const box = try w.box.draw(surface, parts[1], &app.theme, .{ .border = .single, .title = f.label, .badge = f.key, .focused = true });
         try s.input.draw(surface, box, &app.theme, true);
     }
     try rows(app, surface, a, center);
@@ -55,32 +56,48 @@ pub fn render(app: *App, surface: *Surface, main: Region) !void {
 fn nav(app: *App, surface: *Surface, a: std.mem.Allocator, region: Region) !void {
     const theme = &app.theme;
     const s = &app.settings;
-    const inner = try w.box.draw(surface, region, theme, .{ .title = "Settings", .focused = s.focus == .sections and s.editing == null });
+    const focused = s.focus == .sections and s.editing == null;
+    const inner = try pane.draw(surface, region, theme, .{ .title = "SETTINGS", .focused = focused, .rule_right = true });
+    if (inner.width < 6) return;
     for (settings.sections, 0..) |sec, i| {
         if (i >= inner.height) break;
         const y = inner.y + @as(u16, @intCast(i));
         const on = i == s.section;
+        // The selected section: `grave`, `▌` in the signal, its number
+        // in the signal and its name in `bone`.
+        const fill = if (on) w.theme.overlay(theme.style(.normal), theme.style(.selection)) else theme.style(.normal);
+        const opts: w.text.DrawOptions = .{ .ellipsis = true, .fill = fill, .overlay = if (on) theme.style(.selection) else null };
+        try surface.clear(.{ .x = inner.x, .y = y, .width = inner.width, .height = 1 }, fill);
+        if (on) try surface.put(inner.x, y, .{ .text = "▌", .style = w.theme.overlay(theme.style(.accent), theme.style(.selection)) });
         const num = try std.fmt.allocPrint(a, "{d:0>2}", .{i});
-        _ = try w.text.drawText(surface, inner.x + 1, y, 2, num, if (on) .accent else .muted, theme, .{});
-        _ = try w.text.drawText(surface, inner.x + 4, y, inner.width -| 5, sec.name, if (on) .accent else .secondary, theme, .{ .ellipsis = true, .overlay = .{ .bold = on, .reverse = on and s.focus == .sections } });
+        _ = try w.text.drawText(surface, inner.x + 2, y, 2, num, if (on) .accent else .muted, theme, opts);
+        _ = try w.text.drawText(surface, inner.x + 5, y, inner.width -| 6, sec.name, if (on) .normal else .secondary, theme, opts);
     }
     const n: u16 = settings.sections.len;
-    if (inner.height < n + 5) return;
+    if (inner.height < n + 6) return;
     const l = s.currentLayer();
     const y = inner.y + n + 1;
-    _ = try w.text.drawText(surface, inner.x + 1, y, inner.width -| 2, try std.fmt.allocPrint(a, "Layer  {s}  (S)", .{l.name()}), .normal, theme, .{ .ellipsis = true });
+    for (inner.x..inner.x + inner.width) |cx| try surface.put(@intCast(cx), y, .{ .text = "─", .style = theme.style(.border) });
+    _ = try w.text.drawSpans(surface, inner.x + 2, y + 1, inner.width -| 3, &.{
+        .{ .text = "SCOPE  ", .role = .muted, .style = .{ .bold = true } },
+        .{ .text = l.name(), .role = .normal, .style = .{ .bold = true } },
+        .{ .text = "  S", .role = .muted },
+    }, theme, .{ .ellipsis = true });
     const where: []const u8 = if (l.repo) |r| r else if (l.workspace) |p| std.fs.path.basename(p) else "";
-    _ = try w.text.drawText(surface, inner.x + 1, y + 1, inner.width -| 2, where, .muted, theme, .{ .ellipsis = true });
-    _ = try w.text.drawText(surface, inner.x + 1, y + 2, inner.width -| 2, "The narrower file wins;", .faint, theme, .{ .ellipsis = true });
-    _ = try w.text.drawText(surface, inner.x + 1, y + 3, inner.width -| 2, "● set in this layer.", .faint, theme, .{ .ellipsis = true });
+    _ = try w.text.drawText(surface, inner.x + 2, y + 2, inner.width -| 3, where, .muted, theme, .{ .ellipsis = true });
+    _ = try w.text.drawText(surface, inner.x + 2, y + 3, inner.width -| 3, "user → workspace → repo.", .muted, theme, .{ .ellipsis = true });
+    _ = try w.text.drawText(surface, inner.x + 2, y + 4, inner.width -| 3, "The narrower file wins;", .muted, theme, .{ .ellipsis = true });
+    if (inner.height >= n + 7) _ = try w.text.drawText(surface, inner.x + 2, y + 5, inner.width -| 3, "● set in this layer.", .muted, theme, .{ .ellipsis = true });
 }
 
 fn rows(app: *App, surface: *Surface, a: std.mem.Allocator, region: Region) !void {
     const theme = &app.theme;
     const s = &app.settings;
     const sec = settings.sections[s.section];
-    const title = try std.fmt.allocPrint(a, "{d:0>2} {s}", .{ s.section, sec.name });
-    const inner = try w.box.draw(surface, region, theme, .{ .title = title, .focused = s.focus == .rows and s.editing == null });
+    var title_buf: [96]u8 = undefined;
+    const title = std.ascii.upperString(title_buf[0..@min(sec.name.len, title_buf.len)], sec.name[0..@min(sec.name.len, title_buf.len)]);
+    const number = try std.fmt.allocPrint(a, "{d:0>2}", .{s.section});
+    const inner = try pane.draw(surface, region, theme, .{ .title = title, .number = number, .focused = s.focus == .rows and s.editing == null, .rule_right = region.x + region.width < surface.width });
     const list = try s.rows(a);
     if (list.len == 0) {
         const text: []const u8 = if (s.effective == null) "loading…" else "No values.";
@@ -97,11 +114,18 @@ fn rows(app: *App, surface: *Surface, a: std.mem.Allocator, region: Region) !voi
     for (list[s.top..@min(s.top + fit, list.len)], s.top..) |row, i| {
         const y = inner.y + @as(u16, @intCast((i - s.top) * 2));
         const on = i == s.row and s.focus == .rows;
+        // The row under the cursor: `grave` on both its lines, `▌` in the
+        // signal.
+        const fill = if (on) w.theme.overlay(theme.style(.normal), theme.style(.selection)) else theme.style(.normal);
+        const sel: ?term.Style = if (on) theme.style(.selection) else null;
+        const two: u16 = if (inner.height > y - inner.y + 1) 2 else 1;
+        try surface.clear(.{ .x = inner.x, .y = y, .width = inner.width, .height = two }, fill);
+        if (on) for (0..two) |dy| try surface.put(inner.x, y + @as(u16, @intCast(dy)), .{ .text = "▌", .style = w.theme.overlay(theme.style(.accent), theme.style(.selection)) });
         switch (row) {
             .info => |info| {
-                if (info.mark) |m| _ = try w.text.drawText(surface, inner.x + 1, y, 1, if (m == .ok) "●" else "▲", if (m == .ok) .ok else .warn, theme, .{});
-                _ = try w.text.drawText(surface, inner.x + 3, y, inner.width -| 4, info.title, if (on) .accent else .secondary, theme, .{ .ellipsis = true, .overlay = .{ .reverse = on } });
-                if (inner.height > y - inner.y + 1) _ = try w.text.drawText(surface, inner.x + 3, y + 1, inner.width -| 4, info.detail, .muted, theme, .{ .ellipsis = true });
+                if (info.mark) |m| _ = try w.text.drawText(surface, inner.x + 2, y, 1, if (m == .ok) "●" else "▲", if (m == .ok) .ok else .warn, theme, .{ .overlay = sel });
+                _ = try w.text.drawText(surface, inner.x + 4, y, inner.width -| 5, info.title, if (on) .normal else .secondary, theme, .{ .ellipsis = true, .overlay = sel, .fill = fill });
+                if (inner.height > y - inner.y + 1) _ = try w.text.drawText(surface, inner.x + 4, y + 1, inner.width -| 5, info.detail, .muted, theme, .{ .ellipsis = true, .overlay = sel, .fill = fill });
             },
             .field => |f| {
                 const editable = s.editable(f.key);
@@ -111,13 +135,14 @@ fn rows(app: *App, surface: *Surface, a: std.mem.Allocator, region: Region) !voi
                 const source = s.sourceOf(f.key);
                 const here = std.mem.eql(u8, source, layer.name());
                 if (failed) {
-                    _ = try w.text.drawText(surface, inner.x + 1, y, 1, "✕", .err, theme, .{});
-                } else if (here) _ = try w.text.drawText(surface, inner.x + 1, y, 1, "●", .accent, theme, .{});
+                    _ = try w.text.drawText(surface, inner.x + 2, y, 1, "✕", .err, theme, .{ .overlay = sel });
+                } else if (here) _ = try w.text.drawText(surface, inner.x + 2, y, 1, "●", .secondary, theme, .{ .overlay = sel });
                 const shown = try valueText(a, f, s.value(f.key));
                 const vw: u16 = @min(@as(u16, @intCast(@min(w.text.width(shown), 200))), inner.width / 2);
                 const label_w = inner.width -| (vw + 6);
-                _ = try w.text.drawText(surface, inner.x + 3, y, label_w, f.label, if (on) .accent else if (editable) .normal else .faint, theme, .{ .ellipsis = true, .overlay = .{ .reverse = on, .bold = pending } });
-                _ = try w.text.drawText(surface, inner.x + inner.width -| (vw + 1), y, vw, shown, if (failed) .err else if (pending) .warn else if (editable) .secondary else .faint, theme, .{ .ellipsis = true, .overlay = .{ .bold = pending } });
+                const bold: ?term.Style = if (pending) w.theme.overlay(sel orelse .{}, .{ .bold = true }) else sel;
+                _ = try w.text.drawText(surface, inner.x + 4, y, label_w -| 1, f.label, if (on) .normal else if (editable) .secondary else .faint, theme, .{ .ellipsis = true, .overlay = bold });
+                _ = try w.text.drawText(surface, inner.x + inner.width -| (vw + 2), y, vw, shown, if (failed) .err else if (pending) .warn else if (editable) .normal else .faint, theme, .{ .ellipsis = true, .overlay = bold });
                 if (inner.height <= y - inner.y + 1) continue;
                 const detail = if (!editable)
                     try std.fmt.allocPrint(a, "user-only · {s}", .{f.key})
@@ -125,7 +150,7 @@ fn rows(app: *App, surface: *Surface, a: std.mem.Allocator, region: Region) !voi
                     try std.fmt.allocPrint(a, "{s} · {s}", .{ f.key, f.help })
                 else
                     f.key;
-                _ = try w.text.drawText(surface, inner.x + 3, y + 1, inner.width -| 4, detail, .muted, theme, .{ .ellipsis = true });
+                _ = try w.text.drawText(surface, inner.x + 4, y + 1, inner.width -| 6, detail, .muted, theme, .{ .ellipsis = true, .overlay = sel, .fill = fill });
             },
         }
     }
@@ -182,11 +207,11 @@ fn previewLines(app: *App, a: std.mem.Allocator, width: u16) ![]const Line {
             try addWrapped(a, &out, try std.fmt.allocPrint(a, "{s}{s}", .{ mark, line.text }), role, width);
         }
         try out.append(a, .{});
-        try out.append(a, .{ .text = "Same change from a shell", .role = .muted });
+        try out.append(a, .{ .text = "SAME CHANGE FROM A SHELL", .role = .muted });
         for (s.pending.items) |p| try addWrapped(a, &out, try s.command(a, p), .accent, width);
     }
     try out.append(a, .{});
-    try out.append(a, .{ .text = "Checks", .role = .muted });
+    try out.append(a, .{ .text = "CHECKS", .role = .muted });
     if (s.failure) |f| {
         try addWrapped(a, &out, try std.fmt.allocPrint(a, "✕ {s}", .{if (f.key.len > 0) f.key else "config"}), .err, width);
         try addWrapped(a, &out, try std.fmt.allocPrint(a, "  {s}", .{f.code}), .err, width);
@@ -205,7 +230,7 @@ fn preview(app: *App, surface: *Surface, a: std.mem.Allocator, region: Region) !
     const theme = &app.theme;
     const s = &app.settings;
     const n = s.pending.items.len;
-    const inner = try w.box.draw(surface, region, theme, .{
+    const inner = try pane.draw(surface, region, theme, .{
         .title = tail(try app.shortPath(a, s.filePath()), region.width -| 16),
         .badge = if (n > 0) try std.fmt.allocPrint(a, "{d} unsaved", .{n}) else "saved",
         .focused = s.focus == .preview and s.editing == null,

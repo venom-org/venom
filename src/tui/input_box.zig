@@ -188,7 +188,7 @@ pub fn drawFor(app: *App, surface: *Surface, a: std.mem.Allocator, region: Regio
     const theme = &app.theme;
     const focused = target.focused;
     if (sel) |s| if (s.state == .handed_over) {
-        const banner = try w.box.draw(surface, region, theme, .{ .title = try std.fmt.allocPrint(a, "⇄ in {s}", .{s.harness}), .badge = s.id, .focused = focused });
+        const banner = try w.box.draw(surface, region, theme, .{ .border = .single, .title = try std.fmt.allocPrint(a, "⇄ in {s}", .{s.harness}), .badge = s.id, .focused = focused });
         target.area.* = banner;
         // Focused, the box is Input: its keys wait until esc has left it.
         const has_split = app.takeoverSplit(s.id) != null;
@@ -201,13 +201,13 @@ pub fn drawFor(app: *App, surface: *Surface, a: std.mem.Allocator, region: Regio
     };
     // The harness's own sub-agent takes no prompt.
     if (sel) |s| if (s.native) {
-        const banner = try w.box.draw(surface, region, theme, .{ .title = try std.fmt.allocPrint(a, "Owned by {s}", .{s.harness}), .badge = s.id, .focused = focused });
+        const banner = try w.box.draw(surface, region, theme, .{ .border = .single, .title = try std.fmt.allocPrint(a, "Owned by {s}", .{s.harness}), .badge = s.id, .focused = focused });
         target.area.* = banner;
         _ = try w.text.drawText(surface, banner.x + 1, banner.y, banner.width -| 2, "Message the parent to steer it.", .muted, theme, .{ .ellipsis = true });
         if (banner.height > 1) _ = try w.text.drawText(surface, banner.x + 1, banner.y + 1, banner.width -| 2, "[ goes to the parent", .faint, theme, .{ .ellipsis = true });
         return;
     };
-    const box = try w.box.draw(surface, region, theme, .{ .title = "Input", .badge = if (sel) |s| s.harness else "", .focused = focused });
+    const box = try w.box.draw(surface, region, theme, .{ .border = .single, .title = "Input", .badge = if (sel) |s| s.harness else "", .focused = focused });
     target.area.* = box;
     target.input.opts.placeholder = if (sel) |s| placeholder(s.state, detail.steer, detail.interrupt) else idle_placeholder;
     // A spawned child between turns: the human may prompt it, and its parent sees that.

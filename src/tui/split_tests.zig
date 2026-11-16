@@ -104,7 +104,7 @@ test "split menu: agent view by default, take over only with resume, `leader v x
     try testing.expect(has(screen, "2  Shell in worktree"));
     try testing.expect(has(screen, "A plain shell in venom-std/. The agent keeps running."));
     try testing.expect(has(screen, "3  Take over in claude-code"));
-    try testing.expect(has(screen, "│ NORMAL"));
+    try testing.expect(has(screen, "│  NORMAL"));
     // Esc leaves it; nothing was sent.
     _ = try app.feed("\x1b");
     try testing.expect(app.menu == null);
@@ -147,9 +147,9 @@ test "split menu: agent view by default, take over only with resume, `leader v x
     // Side by side: three transcript boxes on the top row, no inspector.
     var rows = std.mem.splitScalar(u8, screen, '\n');
     const top = rows.next().?;
-    try testing.expect(has(top, "╭ venom-echo conformance") and has(top, "╭ libghostty-vt spike"));
+    try testing.expect(has(top, "│ venom-echo conformance") and has(top, "│ libghostty-vt spike"));
     try testing.expectEqual(@as(usize, 2), std.mem.count(u8, top, "venom-echo conformance"));
-    try testing.expect(!has(screen, "╭ Agent "));
+    try testing.expect(!has(screen, "│ AGENT"));
     _ = try app.feed("\\1");
     try testing.expectEqual(@as(usize, 2), app.splits.items.len);
     try testing.expect(std.mem.indexOf(u8, app.message.items, "close one with space v x") != null);
@@ -165,7 +165,7 @@ test "split menu: agent view by default, take over only with resume, `leader v x
     try testing.expectEqualStrings("", try t.sent(a, &app));
     try testing.expect(std.mem.indexOf(u8, app.message.items, "the agent keeps running") != null);
     screen = try render(&app, &surface, a);
-    try testing.expect(has(screen, "╭ Agent ")); // the inspector is back
+    try testing.expect(has(screen, "│ AGENT")); // the inspector is back
     // In the input box ⌃w is text editing, not a close.
     _ = try app.feed("\\\r");
     _ = try t.sent(a, &app);
@@ -217,7 +217,7 @@ test "take over: mid-turn asks first; the harness TUI runs in a split, with a ba
     try testing.expect(has(screen, "1  After this turn"));
     try testing.expect(has(screen, "2  Interrupt now"));
     try testing.expect(has(screen, "3  Cancel"));
-    try testing.expect(has(screen, "│ NORMAL"));
+    try testing.expect(has(screen, "│  NORMAL"));
     _ = try app.feed("\r");
     try testing.expect(app.ask == null);
     try testing.expectEqualStrings("", try t.sent(a, &app));
@@ -263,8 +263,8 @@ test "take over: mid-turn asks first; the harness TUI runs in a split, with a ba
             return error.Timeout;
         }
     }
-    try testing.expect(has(screen, "╭ ⇄ claude-code"));
-    try testing.expect(has(screen, "│ TERMINAL"));
+    try testing.expect(has(screen, "│ ⇄ claude-code"));
+    try testing.expect(has(screen, "│  TERMINAL"));
     // The main view's banner replaces the input box.
     _ = try app.feed(leave); // ⌃] leaves the split
     screen = try render(&app, &surface, a);
@@ -480,10 +480,10 @@ test "live: an agent view and a worktree shell open side by side; `leader v x` c
     screen = try t.dump(a, &surface);
     var rows = std.mem.splitScalar(u8, screen, '\n');
     const top = rows.next().?;
-    try testing.expect(has(top, "╭ Agents"));
-    try testing.expectEqual(@as(usize, 2), std.mem.count(u8, top, "╭ slow work"));
-    try testing.expect(has(top, "╭ Shell"));
-    try testing.expect(has(screen, "│ TERMINAL"));
+    try testing.expect(has(top, " AGENTS"));
+    try testing.expectEqual(@as(usize, 2), std.mem.count(u8, top, "│ slow work"));
+    try testing.expect(has(top, "│ Shell"));
+    try testing.expect(has(screen, "│  TERMINAL"));
 
     // Out of Terminal mode, `leader v x` closes the shell split (the shell's process
     // goes), then `leader v x`
@@ -555,7 +555,7 @@ test "attention while handed over: Needs you, the split marked, Focus split inst
     try changed(&app, a, 51, "a3", "settled", "handed_over");
     _ = try app.feed(leave); // ⌃] leaves the split
     var screen = try render(&app, &surface, a);
-    try testing.expect(has(screen, "╭ ⇄ claude-code"));
+    try testing.expect(has(screen, "│ ⇄ claude-code"));
     var g = try app.buildRows();
     try testing.expect(!g.inGroup("Needs you", "a3"));
 
@@ -658,18 +658,18 @@ test "agent view: its box sends to its agent with its capabilities; a refused pr
         \\{"agent":"a3","title":"theme module trve/bone","harness":"claude-code","state":"running","turns":1,"requests":[],"transcript":[],"model":"opus 5.5","permission_mode":"ask","steer":"inject","interrupt":true,"context":{"used":124000,"window":200000},"context_warn_at":80}
     );
     var screen = try render(&app, &surface, a);
-    try testing.expectEqual(@as(usize, 2), std.mem.count(u8, screen, "╭ Input"));
+    try testing.expectEqual(@as(usize, 2), std.mem.count(u8, screen, "┌ Input"));
     try testing.expect(has(screen, "ask mode  opus 5.5"));
     try testing.expect(has(screen, "Enter steers"));
     try testing.expect(has(screen, "⇥ input"));
-    try testing.expect(has(screen, "│ NORMAL"));
+    try testing.expect(has(screen, "│  NORMAL"));
 
     // ⇥ goes to its box; text is text there.
     _ = try app.feed("\t");
     try testing.expectEqual(@as(?usize, 0), app.focusedSplit());
     screen = try render(&app, &surface, a);
-    try testing.expect(has(screen, "│ INPUT"));
-    try testing.expect(has(screen, "⏎ steer  ⇧⏎ queue"));
+    try testing.expect(has(screen, "│  INPUT"));
+    try testing.expect(has(screen, "⏎ steer   ⇧⏎ queue"));
     _ = try app.feed("q\\x");
     try testing.expectEqualStrings("q\\x", app.splits.items[0].input.?.value());
     try testing.expectEqualStrings("", app.input.value());
@@ -811,16 +811,16 @@ test "agent view: answers its agent's approvals inline, by key and with a reason
     // r asks for the reason in the split's own box; the main box stays.
     _ = try app.feed("r");
     screen = try render(&app, &surface, a);
-    try testing.expectEqual(@as(usize, 1), std.mem.count(u8, screen, "╭ Deny with a reason"));
-    try testing.expectEqual(@as(usize, 1), std.mem.count(u8, screen, "╭ Input"));
-    try testing.expect(has(screen, "│ INPUT"));
+    try testing.expectEqual(@as(usize, 1), std.mem.count(u8, screen, "┌ Deny with a reason"));
+    try testing.expectEqual(@as(usize, 1), std.mem.count(u8, screen, "┌ Input"));
+    try testing.expect(has(screen, "│  INPUT"));
     _ = try app.feed("too risky\r");
     params = try takeOne(&app, a, "inbox.answer");
     try testing.expectEqualStrings("r9", params.get("request").?.string);
     try testing.expectEqualStrings("deny", params.get("answer").?.string);
     try testing.expectEqualStrings("too risky", params.get("reason").?.string);
     screen = try render(&app, &surface, a);
-    try testing.expectEqual(@as(usize, 2), std.mem.count(u8, screen, "╭ Input"));
+    try testing.expectEqual(@as(usize, 2), std.mem.count(u8, screen, "┌ Input"));
 
     // The main view's own inline attention is unchanged: a's item, from the
     // main transcript, answers in the main box.
@@ -832,7 +832,7 @@ test "agent view: answers its agent's approvals inline, by key and with a reason
     try testing.expectEqual(@import("app.zig").Area.transcript, app.area());
     _ = try app.feed("r");
     screen = try render(&app, &surface, a);
-    try testing.expectEqual(@as(usize, 1), std.mem.count(u8, screen, "╭ Deny with a reason"));
+    try testing.expectEqual(@as(usize, 1), std.mem.count(u8, screen, "┌ Deny with a reason"));
     _ = try app.feed("\x1b");
 }
 
@@ -1356,7 +1356,7 @@ test "modes: Terminal is a focused shell; every key is the program's but ui.keys
     const dir = try tmp.dir.realPathFileAlloc(testing.io, ".", a);
     _ = try openScript(&app, "stty raw -echo; dd bs=1 count=5 of=out 2>/dev/null; sleep 30", dir);
     try testing.expectEqual(KeyMode.terminal, app.keyMode());
-    try testing.expect(has(try render(&app, &surface, a), "│ TERMINAL"));
+    try testing.expect(has(try render(&app, &surface, a), "│  TERMINAL"));
 
     // ⌃w, ⌃c, esc, q and i go to the program; nothing here acts on them.
     _ = try app.feed("\x17\x03\x1b");
@@ -1569,7 +1569,7 @@ test "modes: taken back elsewhere while in Terminal: the split stays, typed y ap
     try testing.expect(app.takeoverSplit("a3") == null);
     try testing.expect(has(try render(&app, &surface, a), "[process exited]"));
     const bar = try render(&app, &surface, a);
-    try testing.expect(has(bar, "│ TERMINAL"));
+    try testing.expect(has(bar, "│  TERMINAL"));
     _ = pid;
     _ = try app.feed("y");
     _ = try app.feed("\x03");
