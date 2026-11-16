@@ -27,4 +27,4 @@
                                    ││ ask mode  opus…  ▰▰▰▰▰▰▱▱▱▱ 62% · 124k / 200k ││
                                    │└───────────────────────────────────────────────┘│
  ⏎ open   i input   n new   d diff   ! next   space more   ? keys
- venom ◤ ▸agents  inbox  workspaces  usage  settings      │  NORMAL  │ ▲ 2 need you │ ◆ 1 running │ ~/venom-org │ 15:30
+ venom ◤ ▸agents  inbox  workspaces  usage  settings      │  NORMAL  │ ▲ 2 need you │ ◆ 1 running │ ~/venom-org │ 14:30

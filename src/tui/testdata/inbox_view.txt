@@ -27,4 +27,4 @@
                                                │
                                                │
  1–9 pick   ⏎ type an answer   s snooze   esc back   ? keys
- venom ◤ agents  ▸inbox 8  workspaces  usage  settings    │  NORMAL  │ ▲ 2 need you │ ◆ 1 running │ ~/venom-org │ 15:30
+ venom ◤ agents  ▸inbox 8  workspaces  usage  settings    │  NORMAL  │ ▲ 2 need you │ ◆ 1 running │ ~/venom-org │ 14:30

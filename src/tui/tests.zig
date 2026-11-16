@@ -132,6 +132,8 @@ test "main view snapshot matches testdata/main_view.txt" {
     var app = App.init(ta);
     defer app.deinit();
     try fixtureApp(&app, a);
+    // The bar's clock in UTC, whatever the machine's zone.
+    app.utc_offset_override = 0;
     var surface = try term.Surface.init(ta, 120, 30);
     var discard: std.Io.Writer.Discarding = .init(&.{});
     defer surface.deinit(&discard.writer);
