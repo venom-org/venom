@@ -265,7 +265,7 @@ fn groupCells(a: std.mem.Allocator, r: Row) ![]const []const u8 {
 
 fn choice(surface: *Surface, app: *App, x: u16, y: u16, right: u16, label: []const u8, on: bool) !u16 {
     if (x >= right) return x;
-    return x + try w.text.drawSpans(surface, x, y, right - x, &.{.{ .text = label, .role = if (on) .accent else .muted, .style = .{ .bold = on } }}, &app.theme, .{}) + 2;
+    return x + try w.text.drawSpans(surface, x, y, right - x, &.{.{ .text = label, .role = if (on) .normal else .muted, .style = .{ .bold = on } }}, &app.theme, .{}) + 2;
 }
 
 /// The tree total differs from the row's own numbers: it has sub-agents.

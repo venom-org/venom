@@ -713,7 +713,7 @@ pub const View = struct {
     fn block(self: *View, a: std.mem.Allocator, row: *const Row, requests: []const Request, o: Options, width: usize) !w.Block {
         if (row.record) |r| return switch (row.kind) {
             .turn_started => .{ .spans = try dupe(a, &.{.{ .text = try std.fmt.allocPrint(a, "── turn {s}", .{r.turn}), .role = .muted }}) },
-            .prompt => .{ .spans = try dupe(a, &.{ .{ .text = "› ", .role = .accent }, .{ .text = try clean(a, r.text) } }) },
+            .prompt => .{ .spans = try dupe(a, &.{ .{ .text = "› ", .role = .secondary }, .{ .text = try clean(a, r.text) } }) },
             .text => .{ .spans = try dupe(a, &.{.{ .text = r.text }}), .indent = 2 },
             else => .{ .spans = try dupe(a, &.{.{ .text = try std.fmt.allocPrint(a, "turn {s} {s}", .{ r.turn, r.text }), .role = if (eql(r.text, "completed") or eql(r.text, "interrupted")) .muted else .err }}) },
         };

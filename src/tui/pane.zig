@@ -26,7 +26,7 @@ pub const Options = struct {
     focused: bool = false,
     /// Colours the title, e.g. `warn` for an attention marker.
     role: ?w.Role = null,
-    /// A number before the title, in the signal (`02 Agents`).
+    /// A number before the title, in the secondary text (`02 Agents`).
     number: []const u8 = "",
     /// Draws a `│` down the right edge.
     rule_right: bool = false,
@@ -56,7 +56,7 @@ pub fn draw(surface: *Surface, region: Region, theme: *const w.Theme, opts: Opti
     var x = region.x + 1;
     const title_end = region.x + width -| (if (badge_w > 0) badge_w + 2 else 1);
     if (opts.number.len > 0 and x + opts.number.len + 1 < title_end) {
-        x += try w.text.drawText(surface, x, region.y, title_end - x, opts.number, .accent, theme, .{});
+        x += try w.text.drawText(surface, x, region.y, title_end - x, opts.number, .secondary, theme, .{});
         x += 1;
     }
     if (opts.title.len > 0 and x < title_end) {

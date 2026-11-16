@@ -81,7 +81,7 @@ pub fn render(app: *App, surface: *Surface, main: Region) !void {
                 continue;
             }
             try blocks.append(a, .{ .spans = try spans(a, &.{
-                .{ .text = row.mark, .role = .accent },
+                .{ .text = row.mark, .role = .secondary },
                 .{ .text = " " },
                 .{ .text = row.text },
             }), .indent = 4, .revision = rev });
@@ -89,14 +89,14 @@ pub fn render(app: *App, surface: *Surface, main: Region) !void {
     }
     if (it.grant.len > 0) try blocks.append(a, .{ .spans = try spans(a, &.{
         .{ .text = "grant ", .role = .muted },
-        .{ .text = it.grant, .role = .accent },
+        .{ .text = it.grant, .role = .secondary },
         .{ .text = "  (a keeps it for the workspace)", .role = .muted },
     }), .indent = 2, .revision = rev });
     if (it.stale) try blocks.append(a, .{ .spans = try spans(a, &.{.{ .text = "its harness process is gone; answering resumes the agent", .role = .muted }}), .indent = 2, .revision = rev });
     try blocks.append(a, .{ .spans = try spans(a, &.{.{ .text = "" }}), .revision = rev });
     try blocks.append(a, .{ .spans = try spans(a, &.{
-        .{ .text = if (app.single_view) keys.popupHints(it) else keys.itemHints(it), .role = .accent },
-        .{ .text = if (app.single_view) "" else if (it.away) "  o open" else "  o open  \\ split", .role = .accent },
+        .{ .text = if (app.single_view) keys.popupHints(it) else keys.itemHints(it), .role = .secondary },
+        .{ .text = if (app.single_view) "" else if (it.away) "  o open" else "  o open  \\ split", .role = .secondary },
     }), .revision = rev });
     const batch = if (it.away)
         "Answer in the harness's own TUI; it clears when you take the agent back or it moves on."

@@ -337,12 +337,12 @@ pub fn keySpans(a: std.mem.Allocator, b: Block) ![]const w.Span {
     var spawned = false;
     for (b.cards) |c| spawned = spawned or !c.native;
     var out: std.ArrayList(w.Span) = .empty;
-    try out.append(a, .{ .text = "] open child  \\ split view  ", .role = .accent });
+    try out.append(a, .{ .text = "] open child  \\ split view  ", .role = .secondary });
     if (b.waiting) {
         try out.append(a, .{ .text = "◐ waiting for all", .role = .info });
-        try out.append(a, .{ .text = "  ", .role = .accent });
-    } else try out.append(a, .{ .text = "w wait for all  ", .role = .accent });
-    try out.append(a, .{ .text = if (spawned) "K stop all  P promote" else "K stop all", .role = .accent });
+        try out.append(a, .{ .text = "  ", .role = .secondary });
+    } else try out.append(a, .{ .text = "w wait for all  ", .role = .secondary });
+    try out.append(a, .{ .text = if (spawned) "K stop all  P promote" else "K stop all", .role = .secondary });
     return out.items;
 }
 
