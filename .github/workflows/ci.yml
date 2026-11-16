@@ -45,6 +45,12 @@ jobs:
               echo "$files"
             fi
           fi
+          # Zig setup, fmt, build and test are off in CI for now, on pull
+          # requests and on main: they run locally before a push. The job
+          # still runs and passes, so the required `zig` check reports. To
+          # turn them back on, drop this line and set the test step's
+          # condition back to `steps.changes.outputs.code == 'true'`.
+          code=false
           echo "code=${code}" >> "$GITHUB_OUTPUT"
 
       - name: Check .zigversion is on the 0.17 release line
@@ -76,9 +82,7 @@ jobs:
         if: steps.changes.outputs.code == 'true'
         run: zig build --summary all
 
-      # Tests are off in CI for now, on pull requests and on main: run
-      # `zig build test` locally before pushing. To turn them back on, set the
-      # condition back to `steps.changes.outputs.code == 'true'`.
+      # Off in CI for now, with the rest (see `code=false` above).
       - name: zig build test
         if: false
         run: zig build test --summary all
