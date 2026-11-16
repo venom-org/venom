@@ -385,7 +385,7 @@ pub fn render(app: *App, surface: *Surface, main: Region) !void {
         const on = i == p.cursor;
         const counts = try agentCounts(app, a, ws.path, null);
         const counts_w: u16 = @intCast(w.text.width(counts));
-        _ = try w.text.drawText(surface, left.x + 1, y, 2, "■", if (on) .accent else .faint, theme, .{});
+        _ = try w.text.drawText(surface, left.x + 1, y, 2, "■", if (on) .normal else .faint, theme, .{});
         _ = try w.text.drawText(surface, left.x + 3, y, left.width -| (counts_w + 5), ws.name(), .normal, theme, .{ .ellipsis = true, .overlay = .{ .bold = on, .reverse = on } });
         _ = try w.text.drawText(surface, left.x + left.width -| (counts_w + 1), y, counts_w, counts, .muted, theme, .{});
         const n = ws.repos.len;
@@ -396,7 +396,7 @@ pub fn render(app: *App, surface: *Surface, main: Region) !void {
         y += 2;
     }
     if (p.loaded and y < left.y + left.height) {
-        _ = try w.text.drawText(surface, left.x + 1, y, left.width -| 2, if (p.items.len == 0) "+ add a folder: any folder, git or not" else "+ add folder", .accent, theme, .{ .ellipsis = true });
+        _ = try w.text.drawText(surface, left.x + 1, y, left.width -| 2, if (p.items.len == 0) "+ add a folder: any folder, git or not" else "+ add folder", .secondary, theme, .{ .ellipsis = true });
     }
 
     // Its repos, and the add-folder box under them while it is open.
@@ -454,7 +454,7 @@ fn reposTable(app: *App, surface: *Surface, a: std.mem.Allocator, r: Region, ws:
             if (cx >= end) break;
             const role: w.Role = switch (col) {
                 0 => .normal,
-                1 => if (repo.dirty orelse false) .accent else .secondary,
+                1 => if (repo.dirty orelse false) .warn else .secondary,
                 2 => .secondary,
                 else => .muted,
             };

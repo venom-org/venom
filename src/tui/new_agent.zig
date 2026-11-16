@@ -798,7 +798,7 @@ const Chip = struct { label: []const u8, on: bool };
 /// A row of choices; a glyph tells which are on, so colour is never alone.
 /// Past the width: a window around the cursor, and `+N` for the rest.
 fn chips(app: *App, surface: *Surface, a: std.mem.Allocator, x: u16, y: u16, room: u16, items: []const Chip, cursor: ?usize, focused: bool, glyphs: [2][]const u8) !void {
-    const theme = &app.theme;
+    const theme = &app.crypt;
     const widths = try a.alloc(u16, items.len);
     for (items, widths) |c, *cw| cw.* = @intCast(@min(w.text.width(c.label) + 2, room));
     var first: usize = 0;
@@ -820,7 +820,7 @@ fn chips(app: *App, surface: *Surface, a: std.mem.Allocator, x: u16, y: u16, roo
         }
         const here = focused and cursor != null and cursor.? == i;
         const label = try std.fmt.allocPrint(a, "{s} {s}", .{ if (c.on) glyphs[0] else glyphs[1], c.label });
-        _ = try w.text.drawText(surface, cx, y, cw, label, if (c.on) .accent else .muted, theme, .{ .ellipsis = true, .overlay = .{ .bold = c.on, .reverse = here } });
+        _ = try w.text.drawText(surface, cx, y, cw, label, if (c.on) .normal else .muted, theme, .{ .ellipsis = true, .overlay = .{ .bold = c.on, .reverse = here } });
         cx += cw + 2;
     }
 }
@@ -831,7 +831,7 @@ const label_w = 11;
 
 pub fn draw(app: *App, surface: *Surface, main: Region) !void {
     const a = app.frame.allocator();
-    const theme = &app.theme;
+    const theme = &app.crypt;
     const d = &app.dialog.?;
     const ws = app.panel.find(d.workspace.items);
     surface.setCursor(null);
@@ -871,7 +871,7 @@ pub fn draw(app: *App, surface: *Surface, main: Region) !void {
     for (fields) |f| {
         if (y >= fields_end) break;
         const focused = d.field == f;
-        _ = try w.text.drawText(surface, inner.x + 1, y, label_w, f.label(), if (focused) .accent else .muted, theme, .{ .overlay = .{ .bold = focused } });
+        _ = try w.text.drawText(surface, inner.x + 1, y, label_w, f.label(), if (focused) .normal else .muted, theme, .{ .overlay = .{ .bold = focused } });
         const row: Region = .{ .x = vx, .y = y, .width = room, .height = 1 };
         switch (f) {
             .task => try d.task.draw(surface, row, theme, focused),
@@ -977,5 +977,5 @@ pub fn draw(app: *App, surface: *Surface, main: Region) !void {
     }
     if (inner.height >= 2) _ = try w.text.drawText(surface, inner.x + 1, bottom - 2, inner.width -| 2, try commandLine(a, d, ws), .faint, theme, .{ .ellipsis = true });
     const hint = if (d.starting != null) "starting…" else "esc Cancel  ⇧⏎ Run in background  ⌃⏎ Start in split  ⏎ Start";
-    _ = try w.text.drawText(surface, inner.x + 1, bottom - 1, inner.width -| 2, hint, .accent, theme, .{ .ellipsis = true });
+    _ = try w.text.drawText(surface, inner.x + 1, bottom - 1, inner.width -| 2, hint, .secondary, theme, .{ .ellipsis = true });
 }

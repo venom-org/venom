@@ -266,7 +266,7 @@ const Line = struct { left: []const u8, right: []const u8 = "", role: w.Role = .
 pub fn draw(app: *App, surface: *Surface, main: Region) !void {
     const p = &app.context_panel;
     const a = app.frame.allocator();
-    const theme = &app.theme;
+    const theme = &app.crypt;
     var lines: std.ArrayList(Line) = .empty;
     var meter_line: ?input_box.Meter = null;
     if (!p.loaded) {
@@ -294,9 +294,9 @@ pub fn draw(app: *App, surface: *Surface, main: Region) !void {
         if (p.can_compact or p.can_fork or p.can_mcp_off) {
             try lines.append(a, .{ .left = "" });
             try lines.append(a, .{ .left = "Actions", .role = .muted });
-            if (p.can_compact) try lines.append(a, .{ .left = "c  Compact now", .role = .accent });
-            if (p.can_fork) try lines.append(a, .{ .left = "f  Fork to a fresh agent with a summary", .role = .accent });
-            if (p.can_mcp_off) try lines.append(a, .{ .left = try std.fmt.allocPrint(a, "m  Turn off MCP servers it hasn't used: {s}", .{try std.mem.join(a, ", ", p.unused)}), .role = .accent });
+            if (p.can_compact) try lines.append(a, .{ .left = "c  Compact now", .role = .secondary });
+            if (p.can_fork) try lines.append(a, .{ .left = "f  Fork to a fresh agent with a summary", .role = .secondary });
+            if (p.can_mcp_off) try lines.append(a, .{ .left = try std.fmt.allocPrint(a, "m  Turn off MCP servers it hasn't used: {s}", .{try std.mem.join(a, ", ", p.unused)}), .role = .secondary });
         }
     }
     const bw: u16 = @min(main.width -| 2, 64);

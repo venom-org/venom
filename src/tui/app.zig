@@ -52,6 +52,20 @@ pub fn widgetTheme(chrome: term.theme.Chrome) w.Theme {
     return t;
 }
 
+/// `widgetTheme` with every role on `crypt`, the ground of floating surfaces
+/// (popups, dialogs) and the input box. Selected rows keep their own fill.
+pub fn cryptTheme(chrome: term.theme.Chrome) w.Theme {
+    var t = widgetTheme(chrome);
+    const ground = chrome.color(chrome.theme.crypt);
+    inline for (@typeInfo(w.Theme).@"struct".field_names) |name| {
+        if (comptime !std.mem.eql(u8, name, "selection")) {
+            const style = &@field(t, name);
+            if (style.bg == .default) style.bg = ground;
+        }
+    }
+    return t;
+}
+
 /// Where keys go. A view only decides what the bare
 /// keys do. Only a key changes the mode, never a background event.
 pub const KeyMode = enum {
@@ -280,6 +294,8 @@ pub const App = struct {
     utc_offset_override: ?i32 = null,
     chrome: term.theme.Chrome = .{},
     theme: w.Theme = widgetTheme(.{}),
+    /// `theme` on `crypt`: popups, dialogs and the input box.
+    crypt: w.Theme = cryptTheme(.{}),
     /// Per-frame allocations (groups, spans).
     frame: std.heap.ArenaAllocator,
     /// Where the input box was last drawn (for clicks).
@@ -502,6 +518,7 @@ pub const App = struct {
     pub fn setTheme(self: *App, chrome: term.theme.Chrome) void {
         self.chrome = chrome;
         self.theme = widgetTheme(chrome);
+        self.crypt = cryptTheme(chrome);
     }
 
     /// The colours a shell split is drawn on. Without truecolor they are the

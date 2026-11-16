@@ -46,6 +46,7 @@ test {
     _ = terminal;
     _ = split;
     _ = transcript;
+    _ = @import("approval_card.zig");
     _ = @import("fan_out_tests.zig");
     _ = @import("transcript_tests.zig");
     _ = host;

@@ -37,6 +37,8 @@ const transcript_mod = @import("transcript.zig");
 const workspaces = @import("workspaces.zig");
 const new_agent = @import("new_agent.zig");
 const fan_out = @import("fan_out.zig");
+const inbox_mod = @import("inbox.zig");
+const approval_card = @import("approval_card.zig");
 const pane = @import("pane.zig");
 
 /// Inspector column width, shown from `inspector_min` columns up.
@@ -57,7 +59,7 @@ pub fn render(app: *App, surface: *Surface) !void {
 /// The quit confirmation: what quitting this last TUI stops.
 fn quitOverlay(app: *App, surface: *Surface) !void {
     const a = app.frame.allocator();
-    const theme = &app.theme;
+    const theme = &app.crypt;
     const text = try app.quitPromptText(a);
     const bw: u16 = @min(surface.width -| 4, 72);
     if (bw < 12 or surface.height < 6) return;
@@ -90,7 +92,7 @@ fn quitOverlay(app: *App, surface: *Surface) !void {
         if (y + 1 >= inner.y + inner.height) break;
         _ = try w.text.drawText(surface, inner.x + 1, y, inner.width -| 2, line, .normal, theme, .{ .ellipsis = true });
     }
-    _ = try w.text.drawText(surface, inner.x + 1, inner.y + inner.height -| 1, inner.width -| 2, "⏎ quit    esc stay", .accent, theme, .{});
+    _ = try w.text.drawText(surface, inner.x + 1, inner.y + inner.height -| 1, inner.width -| 2, "⏎ quit    esc stay", .secondary, theme, .{});
 }
 
 /// The leader popup, over everything but the bar, with
@@ -102,7 +104,7 @@ fn leaderPopup(app: *App, surface: *Surface) !void {
     const popup = term.chrome.leader_popup;
     // `leader leader` gets its row with the switcher.
     const m = try popup.model(a, "venom", &app.leader, .{ .key = app.key_settings.leader });
-    _ = try w.leader_popup.draw(surface, area, &app.theme, m, .{});
+    _ = try w.leader_popup.draw(surface, area, &app.crypt, m, .{});
 }
 
 fn renderViews(app: *App, surface: *Surface) !void {
@@ -289,9 +291,9 @@ fn splitPane(app: *App, surface: *Surface, a: std.mem.Allocator, sp: *split.Spli
             if (focused and app.prompt != null) {
                 // An attention key here asked for text: it is answered here.
                 const p = app.prompt.?;
-                const box = try w.box.draw(surface, parts[1], theme, .{ .border = .single, .title = p.mode.title(), .badge = sp.agent, .focused = true, .clear = true });
+                const box = try w.box.draw(surface, parts[1], &app.crypt, .{ .border = .single, .title = p.mode.title(), .badge = sp.agent, .focused = true, .clear = true });
                 sp.box_area = box;
-                try app.answer_input.draw(surface, box, theme, true);
+                try app.answer_input.draw(surface, box, &app.crypt, true);
             } else try input_box.drawFor(app, surface, a, parts[1], ag, &sp.detail, .{ .input = app.boxOf(sp.agent).?, .focused = in_box, .area = &sp.box_area });
         },
         .shell, .take_over => {
@@ -321,14 +323,14 @@ fn splitPane(app: *App, surface: *Surface, a: std.mem.Allocator, sp: *split.Spli
 fn pagerOverlay(app: *App, surface: *Surface, a: std.mem.Allocator, main: Region) !void {
     _ = a;
     const pg = &app.pager.?;
-    const inner = try w.box.draw(surface, main, &app.theme, .{ .title = pg.title, .badge = "esc closes", .focused = true, .clear = true });
+    const inner = try w.box.draw(surface, main, &app.crypt, .{ .title = pg.title, .badge = "esc closes", .focused = true, .clear = true });
     const pad: Region = .{ .x = inner.x + @min(inner.width, 1), .y = inner.y, .width = inner.width -| 2, .height = inner.height };
-    try pg.scroll.draw(app.gpa, surface, pad, try pg.blocks(app.gpa), &app.theme, true);
+    try pg.scroll.draw(app.gpa, surface, pad, try pg.blocks(app.gpa), &app.crypt, true);
 }
 
 /// The split menu, over the main view.
 fn menuOverlay(app: *App, surface: *Surface, a: std.mem.Allocator, m: split.Menu, main: Region) !void {
-    const theme = &app.theme;
+    const theme = &app.crypt;
     const ag = app.model.find(m.agent);
     const harness = if (ag) |s| s.harness else "";
     const folder = if (ag) |s| std.fs.path.basename(s.cwd) else "";
@@ -343,8 +345,8 @@ fn menuOverlay(app: *App, surface: *Surface, a: std.mem.Allocator, m: split.Menu
         if (y + 1 >= inner.y + inner.height) break;
         const on = i == m.cursor;
         const num = try std.fmt.allocPrint(a, "{d}", .{i + 1});
-        _ = try w.text.drawText(surface, inner.x + 1, y, 2, num, .accent, theme, .{});
-        _ = try w.text.drawText(surface, inner.x + 4, y, inner.width -| 14, try o.title(a, harness), if (on) .accent else .normal, theme, .{ .ellipsis = true, .overlay = .{ .bold = true, .reverse = on } });
+        _ = try w.text.drawText(surface, inner.x + 1, y, 2, num, .secondary, theme, .{});
+        _ = try w.text.drawText(surface, inner.x + 4, y, inner.width -| 14, try o.title(a, harness), .normal, theme, .{ .ellipsis = true, .overlay = .{ .bold = true, .reverse = on } });
         if (o == .agent_view) _ = try w.text.drawText(surface, inner.x + inner.width -| 9, y, 8, "default", .muted, theme, .{});
         _ = try w.text.drawText(surface, inner.x + 4, y + 1, inner.width -| 5, try o.description(a, harness, folder), .muted, theme, .{ .ellipsis = true });
     }
@@ -365,7 +367,13 @@ fn transcript(app: *App, a: std.mem.Allocator, rows: *transcript_mod.View, d: *c
     }
     try fan_out.fetch(app, agent);
     try out.appendSlice(a, try rows.build(app.gpa, d, try app.optionsFor(agent), width));
+    // An approval waiting here is asked as one card, after the rows.
+    const approval: ?*const inbox_mod.Item = if (inline_attention) blk: {
+        const it = app.itemOf(agent) orelse break :blk null;
+        break :blk if (it.kind == .approval and !it.away and width >= approval_card.min_width) it else null;
+    } else null;
     for (d.requests.items) |q| {
+        if (approval != null) break;
         // Its call's row shows it, open.
         const on_row = q.call.len > 0 and for (d.records.items) |*r| {
             if (r.kind == .tool and std.mem.eql(u8, r.tool.call, q.call)) break true;
@@ -394,11 +402,10 @@ fn transcript(app: *App, a: std.mem.Allocator, rows: *transcript_mod.View, d: *c
             .{ .text = resets, .role = .muted },
         }), .revision = inbox_rev });
         if (it.kind == .question and !it.away) {
-            const inbox_mod = @import("inbox.zig");
             app.drawn = .{ .item = inbox_mod.itemHash(it), .sig = inbox_mod.optionsSig(it) };
             const done = app.picks.count(it);
             for (try inbox_mod.optionRows(a, it, app.picks.chosen[0..done])) |row| try out.append(a, .{ .spans = try spans(a, &.{
-                .{ .text = row.mark, .role = if (row.header) .muted else .accent },
+                .{ .text = row.mark, .role = if (row.header) .muted else .secondary },
                 .{ .text = if (row.header) "" else " " },
                 .{ .text = row.text, .role = if (row.header) .muted else .normal },
             }), .indent = if (row.header) 2 else 4, .revision = inbox_rev });
@@ -522,7 +529,7 @@ fn inspector(app: *App, surface: *Surface, a: std.mem.Allocator, region: Region)
 /// venom's own status bar.
 /// Take over mid-turn asks first.
 fn askOverlay(app: *App, surface: *Surface, a: std.mem.Allocator, q: split.Ask, main: Region) !void {
-    const theme = &app.theme;
+    const theme = &app.crypt;
     const ag = app.model.find(q.agent);
     const harness = if (ag) |s| s.harness else "";
     const title = if (ag) |s| (if (s.title.len > 0) s.title else s.id) else q.agent;
@@ -536,8 +543,8 @@ fn askOverlay(app: *App, surface: *Surface, a: std.mem.Allocator, q: split.Ask, 
         const y = inner.y + 2 + @as(u16, @intCast(i * 3));
         if (y + 1 >= inner.y + inner.height) break;
         const on = i == q.cursor;
-        _ = try w.text.drawText(surface, inner.x + 1, y, 2, try std.fmt.allocPrint(a, "{d}", .{i + 1}), .accent, theme, .{});
-        _ = try w.text.drawText(surface, inner.x + 4, y, inner.width -| 14, choice.title(), if (on) .accent else .normal, theme, .{ .ellipsis = true, .overlay = .{ .bold = true, .reverse = on } });
+        _ = try w.text.drawText(surface, inner.x + 1, y, 2, try std.fmt.allocPrint(a, "{d}", .{i + 1}), .secondary, theme, .{});
+        _ = try w.text.drawText(surface, inner.x + 4, y, inner.width -| 14, choice.title(), .normal, theme, .{ .ellipsis = true, .overlay = .{ .bold = true, .reverse = on } });
         if (choice == .after_turn) _ = try w.text.drawText(surface, inner.x + inner.width -| 9, y, 8, "default", .muted, theme, .{});
         _ = try w.text.drawText(surface, inner.x + 4, y + 1, inner.width -| 5, choice.description(), .muted, theme, .{ .ellipsis = true });
     }
@@ -826,7 +833,7 @@ fn put(surface: *Surface, x: u16, y: u16, right: u16, value: []const u8, style: 
 }
 
 fn helpOverlay(app: *App, surface: *Surface, a: std.mem.Allocator) !void {
-    const theme = &app.theme;
+    const theme = &app.crypt;
     // Each screen's own keys.
     var shown: std.ArrayList(keys.Binding) = .empty;
     const tree_here = app.dialog == null and app.context_panel.agent == null and !(app.screen == .settings and app.settings.standalone) and !app.single_view;
@@ -864,7 +871,7 @@ fn helpOverlay(app: *App, surface: *Surface, a: std.mem.Allocator) !void {
         };
         // The one rebindable key shows what it is bound to.
         const shown_keys = if (b.action == .local and b.action.local == .leave_terminal) app.leaveTerminalText() else try keys.shownKeys(a, b, app.leaderText());
-        _ = try w.text.drawText(surface, inner.x + 1, y, key_w, shown_keys, .accent, theme, .{});
+        _ = try w.text.drawText(surface, inner.x + 1, y, key_w, shown_keys, .secondary, theme, .{});
         _ = try w.text.drawText(surface, inner.x + 1 + key_w, y, inner.width -| (25 + key_w), b.label, .normal, theme, .{ .ellipsis = true });
         _ = try w.text.drawText(surface, inner.x + inner.width -| 23, y, 22, what, .muted, theme, .{ .ellipsis = true });
     }

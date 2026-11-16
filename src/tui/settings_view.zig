@@ -46,8 +46,8 @@ pub fn render(app: *App, surface: *Surface, main: Region) !void {
         const parts = w.layout.stacked(center, .{ .fixed = 3 });
         center = parts[0];
         const f = s.editing.?;
-        const box = try w.box.draw(surface, parts[1], &app.theme, .{ .border = .single, .title = f.label, .badge = f.key, .focused = true });
-        try s.input.draw(surface, box, &app.theme, true);
+        const box = try w.box.draw(surface, parts[1], &app.crypt, .{ .border = .single, .title = f.label, .badge = f.key, .focused = true, .clear = true });
+        try s.input.draw(surface, box, &app.crypt, true);
     }
     try rows(app, surface, a, center);
     try preview(app, surface, a, preview_region);
@@ -70,7 +70,7 @@ fn nav(app: *App, surface: *Surface, a: std.mem.Allocator, region: Region) !void
         try surface.clear(.{ .x = inner.x, .y = y, .width = inner.width, .height = 1 }, fill);
         if (on) try surface.put(inner.x, y, .{ .text = "▌", .style = w.theme.overlay(theme.style(.accent), theme.style(.selection)) });
         const num = try std.fmt.allocPrint(a, "{d:0>2}", .{i});
-        _ = try w.text.drawText(surface, inner.x + 2, y, 2, num, if (on) .accent else .muted, theme, opts);
+        _ = try w.text.drawText(surface, inner.x + 2, y, 2, num, if (on) .normal else .muted, theme, opts);
         _ = try w.text.drawText(surface, inner.x + 5, y, inner.width -| 6, sec.name, if (on) .normal else .secondary, theme, opts);
     }
     const n: u16 = settings.sections.len;
@@ -208,7 +208,7 @@ fn previewLines(app: *App, a: std.mem.Allocator, width: u16) ![]const Line {
         }
         try out.append(a, .{});
         try out.append(a, .{ .text = "SAME CHANGE FROM A SHELL", .role = .muted });
-        for (s.pending.items) |p| try addWrapped(a, &out, try s.command(a, p), .accent, width);
+        for (s.pending.items) |p| try addWrapped(a, &out, try s.command(a, p), .normal, width);
     }
     try out.append(a, .{});
     try out.append(a, .{ .text = "CHECKS", .role = .muted });
@@ -220,7 +220,7 @@ fn previewLines(app: *App, a: std.mem.Allocator, width: u16) ![]const Line {
     if (s.restart_required) try addWrapped(a, &out, "▲ restart the daemon for it to apply", .warn, width);
     if (s.pending.items.len > 0) {
         try out.append(a, .{});
-        try out.append(a, .{ .text = if (s.applying) "saving…" else "u undo  ⌃s save and reload", .role = .accent });
+        try out.append(a, .{ .text = if (s.applying) "saving…" else "u undo  ⌃s save and reload", .role = .secondary });
     }
     return out.items;
 }
