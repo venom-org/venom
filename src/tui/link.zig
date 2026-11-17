@@ -102,7 +102,7 @@ pub const Link = struct {
             }
             try self.drop(app);
             if (refused) if (self.plain) |env| {
-                app.say("read-only in a venomx pane: start venom outside venomx, or set VENOM_TOKEN to a token you issued there", .{});
+                app.say("read-only here, below a process manager (venomx with isolation on, or a split of venom's own): start venom outside it, or set VENOM_TOKEN to a token you issued", .{});
                 self.path.environ = env;
                 self.plain = null;
                 self.retry_at = 0;

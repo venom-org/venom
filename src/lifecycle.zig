@@ -140,9 +140,12 @@ pub fn regularOrMissing(a: std.mem.Allocator, path: []const u8) !void {
     if (st.mode & c.S.IFMT != c.S.IFREG) return error.NotRegular;
 }
 
-/// The variables that mark a process inside a managed tree. Any of them,
-/// even empty, keeps the TUI from starting a daemon.
-pub const context_markers = [_][]const u8{ "VENOM_PRINCIPAL", "VENOM_AGENT", "VENOMX_PANE", "VENOMX_PRINCIPAL" };
+/// The variables that mark a process venom manages. Any of them, even
+/// empty, keeps the TUI from starting a daemon. A venomx pane is not one of
+/// them: whether venomx keeps its panes apart is its manager's marker's
+/// question (`managerMarker`), and with isolation off a pane is the user's
+/// terminal.
+pub const context_markers = [_][]const u8{ "VENOM_PRINCIPAL", "VENOM_AGENT" };
 
 /// The first managed-context variable present in `environ`, if any.
 pub fn contextMarker(environ: std.process.Environ) ?[]const u8 {

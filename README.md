@@ -28,7 +28,7 @@ Whoever starts the daemon decides how long it runs.
 
 - **`venom` in a terminal, with no daemon running**, starts one: `venom serve --lifetime on-demand --origin interactive`, detached in its own session, in `$HOME`, without your tokens. It stops 5 s after the last venom TUI quits, so quitting and starting `venom` again keeps it. Running agents are stopped cleanly then: each turn ends `interrupted`, and the next send continues the same conversation. Queued agents stay queued until venom runs again. When quitting would stop work like that, venom asks first.
 - **`venom serve`**, by hand or from a supervisor, is persistent: TUIs come and go, and only a signal stops it. `venom serve --lifetime on-demand` follows the on-demand rules, and with no TUI exits after 5 s.
-- **Agents, hooks, MCP and every other command never start a daemon.** With none running they fail with `unavailable.not_running`. So does `venom` inside a venomx pane or an agent (`denied.startup_context`), with a `VENOM_TOKEN` of its own, or with `daemon.interactive_start = false`: start `venom` in a terminal outside venomx.
+- **Agents, hooks, MCP and every other command never start a daemon.** With none running they fail with `unavailable.not_running`. So does `venom` in an agent or below a process manager (`denied.startup_context`: a split of venom's own, or a venomx pane while venomx's isolation is on), with a `VENOM_TOKEN` of its own, or with `daemon.interactive_start = false`. `venom` in a terminal, or in a venomx pane with isolation off (venomx's default), starts it.
 
 `daemon.interactive_start` (default `true`) and `daemon.startup_timeout_ms` (default `5000`, the TUI's budget to get a daemon ready) are restart-only and belong in your user config. A supervised setup sets `daemon.interactive_start = false`, so a stray `venom` never starts a second daemon. `venom doctor` shows the lifetime, who started the daemon and how many TUIs hold it.
 
@@ -62,7 +62,7 @@ With `--real` the config is left at its defaults (`claude` and `codex` from `PAT
 `ui.chrome` (`venom config set --key=ui.chrome --value=.auto`) says where the TUI runs. venom never starts venomx.
 
 - `.own`: full-screen TUI on the terminal.
-- `.host`: a control pane in venomx (`role = control`), or `.own` when no venomx daemon is reachable. In a venomx pane, that pane becomes the control pane. Outside venomx, venom makes session `venom` with the control pane (or finds it), and the terminal becomes `venomx attach` on it. Started that way, the process outside venomx registers the `venom` key table before it becomes `venomx attach`; the table has no expiry, and goes when the daemon stops. Started only inside a pane you opened, there may be no table, and the bar says so. On venomx, a control pane has a pane's default rights: it can write only itself and the panes it creates. venom gives it those rights explicitly, so they hold even with venomx's `grants.isolation` off. On venom, that outside process binds a principal to its process, with everything but `admin`, and it holds no token. Shells and take-over are offered only in an agent's read-only pane, not the control pane, until they are panes of their own.
+- `.host`: a control pane in venomx (`role = control`), or `.own` when no venomx daemon is reachable. In a venomx pane, that pane becomes the control pane. Outside venomx, venom makes session `venom` with the control pane (or finds it), and the terminal becomes `venomx attach` on it. Started that way, the process outside venomx registers the `venom` key table before it becomes `venomx attach`; the table has no expiry, and goes when the daemon stops. Started inside a pane you opened, venom registers the table from the pane while venomx's isolation is off; with it on there may be no table, and the bar says so. On venomx, a control pane has a pane's default rights: it can write only itself and the panes it creates. venom gives it those rights explicitly, so they hold even with venomx's `grants.isolation` off. On venom, that outside process binds a principal to its process, with everything but `admin`, and it holds no token. Shells and take-over are offered only in an agent's read-only pane, not the control pane, until they are panes of their own.
 - `.auto` (default): `.host` when a daemon is reachable, else `.own`.
 
 venom's bar is the bottom row of the area it draws in both modes; venomx's own line is separate, and venom publishes no `venom.*` segments. In host mode:
@@ -79,10 +79,14 @@ zig build test-host -Dvenomx=<path>      # the same with that venomx binary
 
 ## venom in a venomx pane
 
-A process in a venomx pane, or in a split of venom's own TUI, is refused venom's owner file, and an agent is refused venomx's. A pane looks the same whether a person or an agent runs in it. So:
+**Just run `venom` in a pane.** venomx ships with `grants.isolation` off, like tmux, and then a venomx pane is your terminal: `venom` there starts venom's daemon if none runs, uses the owner file, and makes that pane the control pane. It registers the `venom` key table from the pane and binds its agent views to itself, as a start outside venomx does. The daemon it starts isn't the pane's child: killing the pane leaves it to any other venom TUI, and it stops after the last one quits. Settings, the audit log and stopping the daemon work from that pane too.
+
+What stays apart: venom's own agents run under venom's daemon and never get its owner file, in a pane or anywhere else. Agent views, popups and the splits of venom's own TUI never start a daemon. The settings and inbox popups (`ctrl+a v s`, `v i`) only read; save and answer in the control pane.
+
+**With venomx's isolation on** (as venom-os sets it up), venomx marks itself as a process manager and venom treats its panes as managed. `venom` in a pane can't start a daemon (`denied.startup_context`, naming venomx's marker) and is refused the owner file, so it only reads. Then:
 
 - **Start `venom` in a terminal outside venomx.** It starts venom's daemon if none runs. With a venomx daemon up you get a control pane, with everything but `admin`. Its agents keep running if that pane ends, as long as another venom TUI holds an on-demand daemon or the daemon is persistent; detaching venomx keeps the control pane running.
-- **To save settings, stop the daemon or read the audit log,** use a terminal outside venomx: `venom settings`, or `VENOM_TOKEN=@owner venom …`. The settings and inbox popups (`ctrl+a v s`, `v i`) only read; save and answer in the control pane.
+- **To save settings, stop the daemon or read the audit log,** use a terminal outside venomx: `venom settings`, or `VENOM_TOKEN=@owner venom …`.
 - **To use venom from a pane of your own,** issue a token outside venomx, then set it in the pane:
   ```bash
   VENOM_TOKEN=@owner venom grant issue --namespace=person --label=my-pane --json \
@@ -91,7 +95,6 @@ A process in a venomx pane, or in a split of venom's own TUI, is refused venom's
   venom
   ```
   Anything run from that shell can use the token. Anyone with `read` can see a pane's screen, so don't print the token in a pane; if it did show, clear that pane's screen and history.
-  With nothing set, `venom` in a pane only reads.
 - **A token you issued ends** after `grants.max_token_ttl` (24 hours by default) or when `venom serve` restarts. The TUI says so; issue another. A control pane has no token: its rights last as long as its process, across a restart of `venom serve`, and nothing in its environment can be stolen. Its agent views are bound the same way and lose their rights when it quits. These rights are that one process's: a shell or take-over opened from an agent view is `unknown`, and only reads.
 
 ### venomx isolation

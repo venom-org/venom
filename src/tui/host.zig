@@ -316,8 +316,9 @@ pub const Host = struct {
     socket: []u8,
     /// `VENOM_TOKEN`, handed on so a pane is the same venom client.
     token: ?[]u8 = null,
-    /// A principal is bound to this process (`awaitBinding`), so it binds its
-    /// agent views too; they have no token to be handed.
+    /// A principal is bound to this process (`awaitBinding`), or it holds
+    /// the owner file, so it binds its agent views; they have no token to be
+    /// handed and end with this process.
     bound: bool = false,
     panes: std.ArrayList(AgentPane) = .empty,
     marks: std.ArrayList(Mark) = .empty,
@@ -1021,6 +1022,8 @@ pub const Start = struct {
     rows: u16 = 24,
     /// This process waited for its binding and got it (`awaitBinding`).
     bound: bool = false,
+    /// This process connected to venom with the owner file.
+    owner: bool = false,
     /// Run once the control pane exists, before this process becomes
     /// `venomx attach`: it waits until the control pane holds the daemon.
     handoff: ?Handoff = null,
@@ -1041,7 +1044,11 @@ pub const Resolved = union(enum) {
 pub fn resolve(gpa: std.mem.Allocator, a: std.mem.Allocator, s: Start) !Resolved {
     if (s.setting == .own) return .{ .own = null };
     if (s.environ.getPosix("VENOMX_PANE")) |pane| {
-        const client = connect(gpa, s.environ, null) orelse return .{ .own = "venomx is not reachable from this pane; running on our own" };
+        var client = connect(gpa, s.environ, null) orelse return .{ .own = "venomx is not reachable from this pane; running on our own" };
+        // With venomx's isolation off this pane may register the table, as a
+        // process outside would. With it on that is refused, and the bar says
+        // the keys are missing.
+        registerKeys(a, &client, s) catch |err| if (err == error.OutOfMemory) return err;
         return .{ .host = try newHost(gpa, s, pane, client) };
     }
     var owner = connect(gpa, try ownerEnviron(a, s.environ, "VENOMX_TOKEN"), null) orelse return .{ .own = null };
@@ -1067,7 +1074,7 @@ pub fn passable(token: ?[]const u8) ?[]const u8 {
 fn newHost(gpa: std.mem.Allocator, s: Start, pane: []const u8, client: proto.Client) !*Host {
     const h = try gpa.create(Host);
     errdefer gpa.destroy(h);
-    h.* = try .init(gpa, .{ .control = pane, .exe = s.exe, .socket = s.socket, .token = passable(s.environ.getPosix("VENOM_TOKEN")), .bound = s.bound });
+    h.* = try .init(gpa, .{ .control = pane, .exe = s.exe, .socket = s.socket, .token = passable(s.environ.getPosix("VENOM_TOKEN")), .bound = s.bound or s.owner });
     h.client = client;
     try h.begin();
     return h;
@@ -1213,9 +1220,10 @@ fn boundNow(gpa: std.mem.Allocator, a: std.mem.Allocator, path: proto.os.SocketO
     return principal == .string and !std.mem.eql(u8, principal.string, "unknown");
 }
 
-/// Registers the `venom` table and presets on the owner connection: this
-/// process is outside every managed tree and about to
-/// exec, so it keeps nothing. With `bind = daemon` they last until the daemon
+/// Registers the `venom` table and presets: on the owner connection, when
+/// this process is outside every managed tree and about to exec, so it keeps
+/// nothing; or on a pane's own connection, which venomx allows while its
+/// isolation is off. With `bind = daemon` they last until the daemon
 /// stops or `keys.unregister`.
 fn registerKeys(a: std.mem.Allocator, owner: *proto.Client, s: Start) !void {
     _ = try call(a, owner, 7, "floats.register", .{ .name = "venom.settings", .width = "80%", .height = "80%", .anchor = "center", .title = "venom settings", .bind = "daemon" });

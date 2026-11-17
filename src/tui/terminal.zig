@@ -33,7 +33,7 @@ pub const local_commands = .{ .{
     .errors = .{
         .{ .code = "not_found.agent", .summary = "No agent with this ID" },
         .{ .code = "unavailable.not_running", .summary = "No daemon, and this view may not start one (a pane view, a VENOM_TOKEN, or daemon.interactive_start false)" },
-        .{ .code = "denied.startup_context", .summary = "No daemon, and venom runs inside a venomx pane, an agent or below a process manager: start it in a terminal outside venomx" },
+        .{ .code = "denied.startup_context", .summary = "No daemon, and venom runs in an agent or below a process manager (a split of venom's own, or a venomx pane with isolation on): start it in a terminal outside venomx" },
         .{ .code = "invalid_params.startup_config", .summary = "No daemon, and the persisted config is invalid, so none was started" },
         .{ .code = "unavailable.startup_failed", .summary = "The daemon venom started failed, and no other became ready" },
         .{ .code = "unavailable.startup_deadline", .summary = "No daemon became ready within daemon.startup_timeout_ms" },
@@ -119,9 +119,10 @@ pub const Command = struct {
         defer app.deinit();
         var user_path: []const u8 = "";
         defer self.gpa.free(user_path);
-        // The TUI reads the owner file by default. In a
-        // venomx pane that is refused and it runs as `unknown`,
-        // with the VENOM_TOKEN it was given, or as the principal bound to it.
+        // The TUI reads the owner file by default. Below a process manager
+        // (a venomx pane with isolation on, a split of venom's own) that is
+        // refused and it runs as `unknown`, with the VENOM_TOKEN it was given,
+        // or as the principal bound to it.
         var link: Link = .{ .gpa = self.gpa, .path = ctx.path };
         defer link.deinit();
         const no_owner = if (ctx.params.object.get("no_owner")) |v| v == .bool and v.bool else false;
@@ -251,6 +252,8 @@ pub const Command = struct {
             .cols = size.cols,
             .rows = size.rows,
             .bound = bound,
+            // Not refused: the owner file was accepted.
+            .owner = link.plain != null,
             .handoff = handoff.hook(),
         });
     }
