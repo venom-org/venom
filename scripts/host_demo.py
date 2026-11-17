@@ -251,7 +251,7 @@ class Demo(e2e.Demo):
     def auto_without_venomx(self):
         t = self.terminal()
         t.wait_for("need you")
-        t.wait_for("Agents")
+        t.wait_for("agents")
         time.sleep(0.3)
         if os.path.exists(self.vx_socket()):
             raise Failed("venom started a venomx daemon: %s exists" % self.vx_socket())
@@ -354,7 +354,7 @@ class Demo(e2e.Demo):
         t.send(" ")
         time.sleep(0.1)
         t.send("i")
-        t.wait_for("Inbox")
+        t.wait_for("INBOX")
         # Answer-and-advance, one approval per agent.
         for agent in agents:
             until("an inbox item", lambda: any(i["agent"] == agent for i in self.cli("inbox", "list")["items"]))
@@ -441,7 +441,7 @@ class Demo(e2e.Demo):
         for p in panes:
             title = self.spawned[self.tags(p)["group"]].get("title") or "host demo"
             shown = until("the agent's view in %s" % p["pane"], lambda: (lambda c: c if "host demo" in c else None)(self.capture(p["pane"])))
-            if "need you" in shown or "Agents" in shown:
+            if "need you" in shown or "agents" in shown:
                 raise Failed("agent pane %s draws venom's chrome:\n%s" % (p["pane"], shown))
             _ = title
         log("agent panes show their agent, no list, no bar")
@@ -456,10 +456,13 @@ class Demo(e2e.Demo):
         time.sleep(0.1)
         t.send("s")
         pop = until("the settings popup", lambda: (popups() or [None])[0])
-        until("the settings popup's content", lambda: "Settings" in self.capture(pop["pane"]))
+        until("the settings popup's content", lambda: "SETTINGS" in self.capture(pop["pane"]))
         log("settings popup: %s" % pop["pane"])
         # Esc reaches the screen, so a pending edit asks before it is lost.
+        # Down from Providers to General, whose first row is a choice.
         time.sleep(0.3)
+        t.send("j")
+        time.sleep(0.2)
         t.send("\t")
         time.sleep(0.2)
         t.send("\r")
@@ -481,7 +484,7 @@ class Demo(e2e.Demo):
             time.sleep(0.1)
             t.send("s")
             shown = until("the settings popup", lambda: (popups() or [None])[0])
-            until("the settings popup's content", lambda: "Settings" in self.capture(shown["pane"]))
+            until("the settings popup's content", lambda: "SETTINGS" in self.capture(shown["pane"]))
             return shown
         pop = open_settings()
         # The capture can come before the popup is laid out at its size.
@@ -504,11 +507,11 @@ class Demo(e2e.Demo):
         t.send(" ")
         time.sleep(0.1)
         t.send("s")
-        until("the settings in the control pane", lambda: "Settings" in self.capture(cp))
+        until("the settings in the control pane", lambda: "SETTINGS" in self.capture(cp))
         if popups():
             raise Failed("`space s` opened a popup: %s" % popups())
         t.send("\x1b")
-        until("the control pane's list", lambda: "Settings" not in self.capture(cp))
+        until("the control pane's list", lambda: "SETTINGS" not in self.capture(cp))
         log("`space s` in the control pane: drawn in the pane, no popup; esc goes back")
         # The tree's popup is the control pane's own content, without the
         # direction rows no verb could run.
@@ -666,7 +669,7 @@ class Demo(e2e.Demo):
         self.vx("config", "set", "--key=grants.max_token_ttl", "--value=1")
         t2 = self.terminal("agent", "view", "--agent=" + other, "--inbox=true")
         until("the second attach", lambda: b"\x1b[" in t2.out)
-        until("the control pane to take --inbox and --agent", lambda: "Inbox " in self.capture(cp))
+        until("the control pane to take --inbox and --agent", lambda: "INBOX" in self.capture(cp))
         tags = self.tags(next(p for p in self.panes() if p["pane"] == cp))
         if tags.get("venom.selected") != other or "venom.open_inbox" in tags or "venom.open_agent" in tags:
             raise Failed("the control pane's tags after --agent: %s" % tags)
@@ -675,7 +678,7 @@ class Demo(e2e.Demo):
         log("a second venom reused the control pane and honoured --agent and --inbox")
         t3 = self.terminal("agent", "view", "--usage=true")
         until("the third attach", lambda: b"\x1b[" in t3.out)
-        until("the control pane to take --usage", lambda: "Usage" in self.capture(cp) and re.search(r"[1-9]\d* turns", self.capture(cp)))
+        until("the control pane to take --usage", lambda: "USAGE" in self.capture(cp) and re.search(r"[1-9]\d* turns", self.capture(cp)))
         if "venom.open_usage" in self.tags(next(p for p in self.panes() if p["pane"] == cp)):
             raise Failed("venom.open_usage stayed on the control pane")
         log("and --usage")
@@ -687,7 +690,7 @@ class Demo(e2e.Demo):
         self.no_key_table_principal()
         log("the key table outlived the token cap; no principal for it")
 
-        # Removed, it is shown, not silent (human_pane).
+        # Removed, so human_pane sees the human's pane register it again.
         self.vx("keys", "unregister", "--name=venom")
         t.send("\x1b")
         until("the key table to go", lambda: not any(x["name"] == "venom" for x in self.vx("keys", "list")["tables"]))
@@ -735,7 +738,7 @@ class Demo(e2e.Demo):
         # shows which pane has it.
         press("v", "s")
         pop = until("the settings popup from a shell pane", lambda: (popups() or [None])[0])
-        until("the settings popup's content from a shell pane", lambda: "Settings" in self.capture(pop["pane"]))
+        until("the settings popup's content from a shell pane", lambda: "SETTINGS" in self.capture(pop["pane"]))
         time.sleep(0.3)
         t.send("\x1b")
         until("the settings popup to close", lambda: not popups())
@@ -794,7 +797,7 @@ class Demo(e2e.Demo):
         time.sleep(0.5)
         press("a", "s")
         pop = until("the settings popup under the moved prefix", lambda: (popups() or [None])[0])
-        until("its content under the moved prefix", lambda: "Settings" in self.capture(pop["pane"]))
+        until("its content under the moved prefix", lambda: "SETTINGS" in self.capture(pop["pane"]))
         time.sleep(0.3)
         t.send("\x1b")
         until("the settings popup to close", lambda: not popups())
@@ -814,29 +817,28 @@ class Demo(e2e.Demo):
 
     def human_pane(self):
         # `venom` typed into a pane the human opened: that pane is the control
-        # pane and can't register, so with the table removed its bar
-        # says so, whole at 80 columns, and a key press leaves it there.
+        # pane. venomx isolates nothing here, so the pane registers the key
+        # table that was removed, as a venom outside would, and the hint row
+        # (above the bar) has no missing-keys notice.
         made = self.vx("session", "create", "--name=human")
         sock = "--socket=" + os.path.join(self.env["XDG_RUNTIME_DIR"], "venom", "venom.sock")
         w = self.vx("window", "create", "--session=" + made["session"], "--name=sh", "--argv=" + json.dumps([self.venom, "agent", "view", sock]), "--cols=80", "--rows=30")
         p = w["pane"]
         until("the role tag on the human's pane", lambda: self.tags(next(x for x in self.panes() if x["pane"] == p)).get("role") == "control")
-        notice = "no venom keys: run venom outside venomx"
-        def bar():
-            return self.capture(p).rstrip("\n").split("\n")[-1]
-        until("the key table notice", lambda: notice in bar())
-        self.vx("pane", "send", "--pane=" + p, "--text=j")
-        time.sleep(0.3)
-        if notice not in bar():
-            raise Failed("a key press took the notice: %r" % bar())
-        log("no key table: the bar says so at 80 columns, after a key press too: " + bar().strip())
+        until("the key table from the human's pane", lambda: any(x["name"] == "venom" for x in self.vx("keys", "list")["tables"]))
+        def hints():
+            return self.capture(p).rstrip("\n").split("\n")[-2]
+        until("the hint row", lambda: "keys" in hints())
+        if "no venom keys" in hints():
+            raise Failed("the hint row says the keys are missing: %r" % hints())
+        log("the human's pane registered the key table; no notice on its hint row")
         self.vx("pane", "send", "--pane=" + p, "--text=\r")
         sib = until("a sibling agent pane in the human's session", lambda: next((x for x in self.panes() if x["session"] == made["session"] and self.tags(x).get("role") == "agent"), None))
         # Quitting gives the pane back: no role left behind.
         self.vx("pane", "send", "--pane=" + p, "--text=q")
         # The program exits, on_exit keep: the tag is what matters.
         until("the control tags cleared", lambda: "role" not in self.tags(next(x for x in self.panes() if x["pane"] == p)))
-        log("PASS venom in a human's pane: control pane %s, agent pane %s, no key table" % (p, sib["pane"]))
+        log("PASS venom in a human's pane: control pane %s, agent pane %s, key table registered" % (p, sib["pane"]))
 
     # --- 5: a take-over outlives its TUI ---------------------------------------
 
