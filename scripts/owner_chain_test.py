@@ -15,7 +15,10 @@ pane's process reads venom's owner file. Every link must be refused:
 1. the agent, and a double-forked descendant of it, get `owner_context` from
    venomx and from venom;
 2. with no owner token it cannot split a pane;
-3. a process in a pane the human made gets `owner_context` from venom;
+3. a process in a pane the human made gets `owner_context` from venom while
+   venomx's isolation is on, when venomx marks itself as a manager; with it
+   off (venomx's default) that pane is the human's terminal and gets `owner`
+   on venom, and still `owner_context` on venomx;
 4. the human's ways in still work: outside every tree `@owner` gives `owner`,
    and in a pane a token issued from outside gives that token's rights;
 5. an own-mode TUI's shell split and take-over are refused too, in the
@@ -185,6 +188,14 @@ class Chain(host_demo.Demo):
 
     def refused(self, what, got):
         self.expect(what + " is refused the owner token", got.get("code") == "denied.token" and got.get("reason") == "owner_context", {k: got.get(k) for k in ("exit", "principal", "code", "reason")})
+
+    def vx_isolation(self, on):
+        """Sets venomx's isolation and waits for its manager marker to follow."""
+        self.vx("config", "set", "--key=grants.isolation", "--value=" + ("true" if on else "false"))
+        self.vx("config", "reload")
+        folder = os.path.dirname(self.vx_socket())
+        marked = lambda: any(n.startswith("manager-%d-" % self.vx_daemon.pid) for n in os.listdir(folder))
+        host_demo.until("venomx's manager marker to follow isolation", lambda: marked() == on, 10)
 
     def human_pane(self, argv, env=None):
         made = self.vx("session", "create", "--name=human%d" % len(argv) + str(time.time_ns() % 100000))
@@ -369,7 +380,10 @@ class Chain(host_demo.Demo):
         self.expect("it can't answer another agent's approval", got["answer"]["exit"] != 0, {k: got["answer"].get(k) for k in ("exit", "code")})
         self.expect("that approval is still pending", self.state(target) == "needs_you" and self.approvals() == before, self.state(target))
         self.expect("it can't bind venomx's daemon", got["bind"]["exit"] == 4, got["bind"]["code"])
+        # With isolation on venomx is a manager, and nothing binds to it.
+        self.vx_isolation(True)
         rc, owner_bind = self.raw("grant", "issue", "--pid=%d" % self.vx_daemon.pid, "--grants=" + json.dumps([{"right": "read", "scope": "*"}]))
+        self.vx_isolation(False)
         self.expect("the owner can't either: it is a manager", rc != 0 and owner_bind.get("error", {}).get("code") == "conflict.process_manager", owner_bind)
         self.refused("a shell below a bound view to venom", got["venom"])
         self.refused("a shell below a bound view to venomx", got["venomx"])
@@ -488,12 +502,20 @@ class Chain(host_demo.Demo):
         self.refused("double-forked agent process to venom", orphan["venom"])
         self.refused("double-forked agent process to venomx", orphan["venomx"])
 
-        # 3. A process in a pane the human made.
+        # 3. A process in a pane the human made, with venomx's isolation on:
+        # venomx is a manager.
+        self.vx_isolation(True)
         self.human_pane(self.probe_argv("pane", "human_pane.json"))
         pane = self.result("human_pane.json")
         self.refused("a process in a human's pane to venom", pane["venom"])
         self.refused("a process in a human's pane to venomx", pane["venomx"])
         self.expect("with no token that pane is unknown on venom", pane["venom_plain"]["principal"] == "unknown", pane["venom_plain"]["principal"])
+        # And off, venomx's default: the pane is the human's terminal to venom.
+        self.vx_isolation(False)
+        self.human_pane(self.probe_argv("pane", "open_pane.json"))
+        pane = self.result("open_pane.json")
+        self.expect("isolation off: a human's pane is the owner on venom", pane["venom"]["principal"] == "owner", {k: pane["venom"].get(k) for k in ("exit", "principal", "code", "reason")})
+        self.refused("isolation off: a human's pane to venomx", pane["venomx"])
 
         # 4b. The documented way: a token issued from outside.
         grants = [{"right": r, "scope": "*"} for r in ("read", "write", "respond", "files", "spawn")]

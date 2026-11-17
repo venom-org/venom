@@ -27,7 +27,12 @@ pseudo-terminals. Checks, with real processes and sockets:
     file may not set one, and doctor warns while a change is pending.
 11. While another process holds the socket's lock, `venom` waits and launches
     nothing; once it is free, one daemon starts. Below a process manager's
-    marker the TUI refuses with `denied.startup_context`, naming the marker.
+    marker (a venomx with isolation on) the TUI refuses with
+    `denied.startup_context`, naming the marker.
+12. In a venomx pane with no manager's marker (venomx's isolation off),
+    `VENOMX_PANE` and `VENOMX_PRINCIPAL` don't stop it: `venom` starts a
+    daemon and holds it as in a terminal; only venom's own agent variables
+    refuse.
 
 Exit status 0 when it passed. Every wait is bounded.
 """
@@ -409,7 +414,7 @@ class Test:
             expect(code == 6 and out["error"]["code"] == "unavailable.not_running", "%s: %r" % (args, out))
         code, out = self.json("doctor")
         expect(code == 6 and out["error"]["data"].get("fix") == "venom doctor --json", out)
-        expect("a human runs `venom`" in out["error"]["message"], out)
+        expect("a human starts it by running `venom`" in out["error"]["message"], out)
         r = self.run("agent", "hook", "--agent=a1", "--input={}")
         expect(r.returncode == 1, "agent hook with no daemon exited %d" % r.returncode)
         # No terminal: the TUI fails before connecting.
@@ -418,9 +423,8 @@ class Test:
         # Pane views and refusals, on a terminal.
         cases = [
             (["agent", "view", "--solo=true"], {}, 6),
-            ([], {"VENOMX_PANE": ""}, 4),
             ([], {"VENOM_AGENT": "a1"}, 4),
-            ([], {"VENOMX_PRINCIPAL": "g2"}, 4),
+            ([], {"VENOM_AGENT": ""}, 4),
             ([], {"VENOM_PRINCIPAL": "a1"}, 4),
             ([], {"VENOM_TOKEN": "vnt1.venom.x.y"}, 6),
         ]
@@ -556,9 +560,26 @@ class Test:
         except OSError:
             return False
 
+    def check_venomx_pane(self):
+        # 12. A venomx pane with isolation off leaves no marker: the pane is
+        # the user's terminal. No venomx answers here, so it runs on its own.
+        expect(self.gone(), "a daemon runs before the test")
+        env = dict(self.env, VENOMX_PANE="p3", VENOMX_PRINCIPAL="g2")
+        t = self.tui(env)
+        self.ready(t)
+        pid = until("the daemon", self.daemon_pid)
+        # A hold needs the owner or a person: the TUI got the owner file.
+        self.clients(1)
+        with open("/proc/%d/environ" % pid, "rb") as f:
+            names = [e.split(b"=", 1)[0].decode() for e in f.read().split(b"\0") if e]
+        expect("VENOMX_PANE" not in names and "VENOMX_PRINCIPAL" not in names, "the daemon got the pane's variables")
+        t.quit()
+        until("the daemon to stop", self.gone, 15)
+
     def main(self):
         try:
             self.check_no_daemon()
+            self.check_venomx_pane()
             self.check_start_and_linger()
             self.check_two_tuis()
             self.check_concurrent()

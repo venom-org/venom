@@ -38,7 +38,7 @@ pub const App = cli.WithBootstrap(scope.extend(cfg.merge(cli.manifest.normalize(
 
 /// What `doctor` says with no daemon: agents never start venom, so the fix
 /// only rechecks, and the message tells a human what to do.
-pub const no_daemon: cli.runtime.NoDaemon = .{ .fix = "venom doctor --json", .message = "No daemon at the selected socket; a human runs `venom` in a terminal outside venomx; agents never start it" };
+pub const no_daemon: cli.runtime.NoDaemon = .{ .fix = "venom doctor --json", .message = "No daemon at the selected socket; a human starts it by running `venom`; agents never start it" };
 
 /// `serve`'s own parameters: who decides the daemon's lifetime. A bare
 /// `venom` starts `serve --lifetime on-demand --origin interactive`.
@@ -150,7 +150,7 @@ pub const skill_notes =
     \\agent is one run of a harness on a task, with turns; venom gives each agent
     \\its own worktree per repo. Agents, hooks and MCP never start venom: with no
     \\daemon running every call returns `unavailable.not_running`, and only a
-    \\human starts it, by running `venom` in a terminal outside venomx. A daemon
+    \\human starts it, by running `venom` in a terminal or a venomx pane. A daemon
     \\started that way is on-demand: it stops, and with it every running turn,
     \\your own included, shortly after the human quits the last venom TUI. Every verb
     \\is read-only unless a grant allows more; use named flags and `--json`.

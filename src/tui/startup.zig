@@ -36,7 +36,7 @@ pub const Options = struct {
 };
 
 /// The message every caller that may not start a daemon gets.
-pub const not_running_message = "the venom daemon is not running; start `venom` in a terminal outside venomx";
+pub const not_running_message = "the venom daemon is not running; start it by running `venom`";
 
 /// Returns once a daemon answers at the socket (the caller then connects as
 /// usual), or the failure to report. Errors other than a missing daemon on
@@ -63,7 +63,7 @@ fn refusal(o: Options) !?Failure {
     if (o.environ.getPosix("VENOM_TOKEN")) |t| if (!std.mem.eql(u8, t, "@owner"))
         return .{ .code = "unavailable.not_running", .message = "the venom daemon is not running, and a token works only on the daemon that issued it; start `venom` without VENOM_TOKEN" };
     if (lifecycle.contextMarker(o.environ)) |name|
-        return .{ .code = "denied.startup_context", .message = try std.fmt.allocPrint(o.a, "venom is not running, and can't be started from inside a venomx pane or an agent ({s} is set); start `venom` in a terminal outside venomx", .{name}) };
+        return .{ .code = "denied.startup_context", .message = try std.fmt.allocPrint(o.a, "venom is not running, and can't be started by an agent ({s} is set); a human starts it by running `venom`", .{name}) };
     const marker = lifecycle.managerMarker(o.a, o.socket) catch |err| {
         if (err == error.OutOfMemory) return err;
         return .{ .code = "denied.startup_context", .message = "venom is not running, and the directory of its socket can't be checked for a manager's marker" };
